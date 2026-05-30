@@ -1,0 +1,12 @@
+{
+  "_comment": "Placeholder. Populated by the periodic measurement job (see README). The headline population is: sites that send `Alt-Svc: h3` AND publish no HTTPS RR.",
+  "updated": null,
+  "domain_list": "tranco-top-1m",
+  "sample_size": null,
+  "alt_svc_h3_count": null,
+  "https_rr_count": null,
+  "alt_svc_without_https_rr_count": null,
+  "alt_svc_without_https_rr_pct": null,
+  "caption": "of measured sites send <code>Alt-Svc: h3</code> but publish <b>no HTTPS DNS record</b> — every first connection to them takes a round trip it didn't have to.",
+  "source": "measurement pipeline pending — number is a placeholder"
+}

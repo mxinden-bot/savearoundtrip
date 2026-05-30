@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>savearoundtrip — publish an HTTPS DNS record, skip a round trip</title>
+<meta name="description" content="Sites send Alt-Svc: h3 but publish no HTTPS DNS record, so browsers waste a round trip before using HTTP/3. Publish an HTTPS RR (RFC 9460) and connect to QUIC on the first connection.">
+<meta property="og:title" content="savearoundtrip">
+<meta property="og:description" content="Publish an HTTPS DNS record. Let browsers reach HTTP/3 on the first connection instead of wasting a round trip.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>⏱️</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <span class="brand">savearoundtrip<span class="blink">_</span></span>
+    <nav>
+      <a href="#why">why</a>
+      <a href="#how">how</a>
+      <a href="#check">check a domain</a>
+      <a href="#publish">publish</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div class="kicker">HTTP/3 · QUIC · SVCB/HTTPS DNS records · RFC 9460</div>
+    <h1>Your site says <span class="hl">Alt-Svc: h3</span>.<br>Your DNS doesn't.<br>That costs a <span class="hl">round trip</span>.</h1>
+    <p class="lede">
+      Plenty of sites advertise HTTP/3 with an <code>Alt-Svc</code> header — but
+      a browser can only read that header <span class="dim">after</span> it has
+      already connected over TCP+TLS. So the first connection never uses HTTP/3.
+      Publish an <b>HTTPS DNS record</b> with <code>alpn="h3"</code> and the
+      client goes straight to QUIC on connection&nbsp;#1. One less round trip,
+      for free.
+    </p>
+  </div>
+
+  <!-- headline metric -->
+  <div class="metric">
+    <div class="big loading" id="metric-num">…</div>
+    <div class="cap" id="metric-cap">
+      of measured sites send <code>Alt-Svc: h3</code> but publish
+      <b>no HTTPS DNS record</b> — every first connection to them takes a
+      round trip it didn't have to.
+    </div>
+    <div class="src" id="metric-src">measurement pipeline pending — number is a placeholder</div>
+  </div>
+
+  <!-- WHY -->
+  <section id="why">
+    <h2>the wasted round trip</h2>
+    <p>
+      <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
+      is a response header. To read it, the client must finish a request — which
+      means it has <i>already</i> opened a TCP connection, done a TLS handshake,
+      and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
+      speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
+    </p>
+
+    <div class="rtt">
+      <div class="col bad">
+        <h4>Alt-Svc only — no HTTPS RR</h4>
+        <ol>
+          <li>DNS: resolve <b>A</b>/<b>AAAA</b></li>
+          <li>TCP handshake (1 RTT)</li>
+          <li>TLS 1.3 handshake (1 RTT)</li>
+          <li>HTTP/2 request → response carries <b>Alt-Svc: h3</b></li>
+          <li><span class="dim">… now, and only now, the client knows about h3</span></li>
+          <li>It uses HTTP/3 on some <b>future</b> connection</li>
+        </ol>
+        <div class="verdict">First visit never touches QUIC.</div>
+      </div>
+      <div class="col good">
+        <h4>HTTPS DNS record published</h4>
+        <ol>
+          <li>DNS: resolve <b>HTTPS</b> RR → <b>alpn="h3"</b> + IP hints</li>
+          <li>QUIC handshake straight away (1 RTT, even 0-RTT)</li>
+          <li>HTTP/3 request</li>
+        </ol>
+        <div class="verdict">First visit is HTTP/3. Round trip saved.</div>
+      </div>
+    </div>
+
+    <p class="dim">
+      The IETF itself acknowledges this is the better plan: <a
+      href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
+      ("HTTP Alternative Services, Plan B") proposes treating the DNS as the
+      <i>single source of truth</i> for service reachability, with
+      <code>Alt-Svc</code> demoted to a mere hint to go re-check the DNS. It
+      calls out <code>Alt-Svc</code>'s caching trade-offs (pick a long
+      <code>max-age</code> and clients use stale alternatives; pick a short one
+      and they fall back to old protocols too often) and the fact that clients
+      can't reliably detect the network changes that should invalidate a cached
+      alternative.
+    </p>
+  </section>
+
+  <!-- HOW / why RR is superior -->
+  <section id="how">
+    <h2>why the HTTPS record is strictly better</h2>
+    <p>
+      The HTTPS resource record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>,
+      Nov 2023 — same wire format as SVCB) folds everything a client needs to
+      open the optimal connection into the DNS answer it was already fetching.
+      Concretely:
+    </p>
+
+    <h3>1 · HTTP/3 discovery before the first byte</h3>
+    <p>
+      The <code>alpn</code> SvcParam lists the
+      <a href="https://www.rfc-editor.org/rfc/rfc7301">ALPN</a> protocol IDs the
+      endpoint speaks — e.g. <code>h3</code> (<a
+      href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
+      <code>h2</code>. Because it arrives during name resolution, the client
+      can pick QUIC for its <i>very first</i> connection instead of discovering
+      h3 only after an HTTP/2 round trip. An HTTPS RR can carry <b>multiple</b>
+      ALPNs; an <code>Alt-Svc</code> field value carries one protocol each.
+    </p>
+
+    <h3>2 · ECH — Encrypted Client Hello (only the DNS can deliver it)</h3>
+    <p>
+      The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
+      public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
+      ECH encrypts the TLS ClientHello — including the SNI server name — so a
+      network observer can't see which site you're visiting. This is a
+      <b>chicken-and-egg</b> problem the header can't solve: you need the public
+      key <i>before</i> you send the first ClientHello, which is exactly when no
+      connection exists yet. Only an out-of-band channel — the DNS, i.e. the
+      HTTPS record — can bootstrap ECH. No HTTPS RR, no ECH.
+    </p>
+
+    <h3>3 · IP hints — connect without a second lookup race</h3>
+    <p>
+      <code>ipv4hint</code> and <code>ipv6hint</code> ship candidate addresses
+      inside the HTTPS answer. The client can start connecting immediately and
+      run <a href="https://www.rfc-editor.org/rfc/rfc8305">Happy Eyeballs v2</a>
+      (RFC 8305) over them, rather than serializing an extra A/AAAA resolution
+      step. They're especially valuable at the zone apex and for steering to the
+      right CDN edge. <code>Alt-Svc</code> has no equivalent.
+    </p>
+
+    <h3>4 · Aliasing at the zone apex, no CNAME hacks</h3>
+    <p>
+      In <i>AliasMode</i> (priority&nbsp;0) an HTTPS record redirects the apex of
+      a zone — <code>example.com</code> itself — to another target, something a
+      <code>CNAME</code> can't legally do at the apex. <i>ServiceMode</i>
+      (priority&nbsp;&ge;&nbsp;1) carries the connection parameters above. One
+      record type does load-distribution, failover, and parameter delivery.
+    </p>
+
+    <h3>5 · One authoritative source, sane caching</h3>
+    <p>
+      Reachability lives in the DNS with a normal TTL, instead of being smeared
+      across per-origin header caches with the <code>max-age</code> dilemma
+      described above. The browser was going to do a DNS lookup anyway — this
+      just makes that lookup carry the answer.
+    </p>
+
+    <table class="cmp">
+      <thead>
+        <tr><th>capability</th><th>Alt-Svc header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
+        <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
+        <tr><td>multiple ALPNs</td><td class="no">one per value</td><td class="yes">yes</td></tr>
+        <tr><td>IP hints</td><td class="no">—</td><td class="yes">ipv4hint / ipv6hint</td></tr>
+        <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
+        <tr><td>apex redirection</td><td class="no">—</td><td class="yes">AliasMode</td></tr>
+        <tr><td>source of truth</td><td class="no">header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- CHECK -->
+  <section id="check">
+    <h2>check a domain</h2>
+    <p class="dim">
+      Queries Cloudflare's DNS-over-HTTPS endpoint for the
+      <code>HTTPS</code> (type&nbsp;65) record, live, from your browser, and
+      decodes the SVCB wire format. Nothing is sent to a server of ours — there
+      isn't one.
+    </p>
+    <div class="tool">
+      <form id="lookup-form">
+        <div class="prompt">
+          <span class="ps1">dig HTTPS</span>
+          <input id="domain" type="text" placeholder="example.com" autocomplete="off"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url">
+          <button id="go" type="submit">look up</button>
+        </div>
+      </form>
+      <div class="examples">
+        try:
+        <a href="#" data-example="cloudflare.com">cloudflare.com</a>
+        <a href="#" data-example="blog.mozilla.org">blog.mozilla.org</a>
+        <a href="#" data-example="github.com">github.com</a>
+        <a href="#" data-example="example.com">example.com</a>
+      </div>
+      <div id="result"></div>
+    </div>
+    <p class="dim" style="font-size:12.5px;margin-top:14px">
+      Can't I just check <code>Alt-Svc</code> too? Not from a web page — CORS
+      forbids reading another origin's response headers in the browser. Spotting
+      "<code>Alt-Svc</code> but no HTTPS&nbsp;RR" needs an offline scan; that's
+      what the headline number is for.
+    </p>
+  </section>
+
+  <!-- PUBLISH -->
+  <section id="publish">
+    <h2>publish one (it's two lines)</h2>
+    <p>A ServiceMode HTTPS record advertising h3, with address hints:</p>
+    <pre><code><span class="tok-com">; zone file (BIND-style)</span>
+example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span>
+
+<span class="tok-com">; add ECH once you have an ECHConfigList:</span>
+<span class="tok-com">;   ... alpn="h3,h2" ech="AED+DQBA..." ipv4hint=...</span></code></pre>
+    <ul class="tick">
+      <li>Priority <code>1</code> = ServiceMode (carries params). <code>0</code> = AliasMode.</li>
+      <li><code>.</code> as the target means "same name as the owner".</li>
+      <li>Most managed DNS providers (Cloudflare, Route&nbsp;53, etc.) expose an HTTPS/SVCB record type directly.</li>
+      <li>Verify it: paste your domain into the <a href="#check">checker above</a>.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>
+      A nudge toward a faster, more private web. No tracking, no cookies, no
+      server — just static files and a DNS query you make yourself.
+    </div>
+    <div class="refs">
+      <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838 Alt-Svc</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 HTTP/3</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc8305">RFC 8305 Happy Eyeballs v2</a> ·
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni ECH</a> ·
+      <a href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Headline metric: load from the measurement pipeline output if present.
+  fetch("data/stats.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((s) => {
+      const num = document.getElementById("metric-num");
+      if (s.alt_svc_without_https_rr_pct != null) {
+        num.textContent = s.alt_svc_without_https_rr_pct + "%";
+        num.classList.remove("loading");
+      }
+      if (s.caption) document.getElementById("metric-cap").innerHTML = s.caption;
+      if (s.source) document.getElementById("metric-src").textContent = s.source;
+    })
+    .catch(() => {
+      const num = document.getElementById("metric-num");
+      num.textContent = "??%";
+      num.classList.remove("loading");
+    });
+</script>
+<script src="js/lookup.js"></script>
+</body>
+</html>

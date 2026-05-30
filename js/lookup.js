@@ -1,0 +1,268 @@
+/* savearoundtrip — live HTTPS-RR lookup via Cloudflare DNS-over-HTTPS.
+ *
+ * Cloudflare's DoH JSON endpoint returns type-65 (HTTPS) records as RFC 3597
+ * "generic" RDATA, e.g.  "\# 61 00 01 00 00 01 00 06 02 68 33 ..."
+ * so we decode the SVCB/HTTPS wire format (RFC 9460 §2.2) ourselves.
+ */
+
+const DOH = "https://cloudflare-dns.com/dns-query";
+const TYPE_HTTPS = 65;
+
+// SvcParamKeys — RFC 9460 §14.3.2 (+ the `ech` key).
+const SVC_KEYS = {
+  0: "mandatory",
+  1: "alpn",
+  2: "no-default-alpn",
+  3: "port",
+  4: "ipv4hint",
+  5: "ech",
+  6: "ipv6hint",
+};
+
+/* ---- wire-format helpers ---- */
+
+// "\# 61 00 01 ..." -> Uint8Array. Returns null if it isn't generic form.
+function parseGeneric(data) {
+  const s = data.trim();
+  if (!s.startsWith("\\#")) return null;
+  const parts = s.split(/\s+/).slice(1);          // drop "\#"
+  const len = parseInt(parts.shift(), 10);
+  const bytes = parts.map((h) => parseInt(h, 16));
+  if (bytes.length !== len || bytes.some(isNaN)) return null;
+  return Uint8Array.from(bytes);
+}
+
+function readName(buf, pos) {
+  // Uncompressed domain name. "." (root) is a single 0 byte.
+  const labels = [];
+  while (buf[pos] !== 0) {
+    const n = buf[pos++];
+    labels.push(String.fromCharCode(...buf.slice(pos, pos + n)));
+    pos += n;
+  }
+  return [labels.length ? labels.join(".") + "." : ".", pos + 1];
+}
+
+function ipv4(b) { return Array.from(b).join("."); }
+
+function ipv6(b) {
+  const groups = [];
+  for (let i = 0; i < 16; i += 2) {
+    groups.push(((b[i] << 8) | b[i + 1]).toString(16));
+  }
+  // collapse the longest run of zero groups into "::"
+  let best = -1, bestLen = 0, run = -1, runLen = 0;
+  for (let i = 0; i < 8; i++) {
+    if (groups[i] === "0") {
+      if (run < 0) run = i;
+      if (++runLen > bestLen) { bestLen = runLen; best = run; }
+    } else { run = -1; runLen = 0; }
+  }
+  if (bestLen > 1) {
+    const head = groups.slice(0, best).join(":");
+    const tail = groups.slice(best + bestLen).join(":");
+    return `${head}::${tail}`;
+  }
+  return groups.join(":");
+}
+
+// Decode HTTPS/SVCB RDATA -> { priority, target, params: {alpn, ipv4hint, ...} }
+function parseSvcb(buf) {
+  let pos = 0;
+  const priority = (buf[pos] << 8) | buf[pos + 1];
+  pos += 2;
+  let target;
+  [target, pos] = readName(buf, pos);
+
+  const params = {};
+  while (pos < buf.length) {
+    const key = (buf[pos] << 8) | buf[pos + 1];
+    const vlen = (buf[pos + 2] << 8) | buf[pos + 3];
+    pos += 4;
+    const v = buf.slice(pos, pos + vlen);
+    pos += vlen;
+    const name = SVC_KEYS[key] || `key${key}`;
+
+    switch (name) {
+      case "alpn": {
+        const ids = [];
+        let p = 0;
+        while (p < v.length) {
+          const n = v[p++];
+          ids.push(String.fromCharCode(...v.slice(p, p + n)));
+          p += n;
+        }
+        params.alpn = ids;
+        break;
+      }
+      case "no-default-alpn":
+        params["no-default-alpn"] = true;
+        break;
+      case "port":
+        params.port = (v[0] << 8) | v[1];
+        break;
+      case "ipv4hint": {
+        const out = [];
+        for (let i = 0; i < v.length; i += 4) out.push(ipv4(v.slice(i, i + 4)));
+        params.ipv4hint = out;
+        break;
+      }
+      case "ipv6hint": {
+        const out = [];
+        for (let i = 0; i < v.length; i += 16) out.push(ipv6(v.slice(i, i + 16)));
+        params.ipv6hint = out;
+        break;
+      }
+      case "ech":
+        params.ech = vlen; // present; value is an opaque ECHConfigList
+        break;
+      case "mandatory":
+        params.mandatory = true;
+        break;
+      default:
+        params[name] = vlen;
+    }
+  }
+  return { priority, target, params };
+}
+
+/* ---- the lookup ---- */
+
+async function lookup(domain) {
+  const url = `${DOH}?name=${encodeURIComponent(domain)}&type=HTTPS`;
+  const res = await fetch(url, { headers: { accept: "application/dns-json" } });
+  if (!res.ok) throw new Error(`DoH HTTP ${res.status}`);
+  const json = await res.json();
+  const answers = (json.Answer || []).filter((a) => a.type === TYPE_HTTPS);
+  const records = [];
+  for (const a of answers) {
+    const bytes = parseGeneric(a.data);
+    if (bytes) records.push(parseSvcb(bytes));
+  }
+  return { status: json.Status, records, raw: answers };
+}
+
+/* ---- rendering ---- */
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+
+function pills(arr, hot) {
+  return arr
+    .map((x) => `<span class="pill${hot && hot(x) ? " h3" : ""}">${x}</span>`)
+    .join("");
+}
+
+function render(domain, out, target) {
+  target.innerHTML = "";
+
+  if (!out.records.length) {
+    target.append(
+      verdict(
+        "warn",
+        "No HTTPS record published",
+        `<code>${domain}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
+          `can only discover that <i>after</i> a first connection (e.g. via an ` +
+          `<code>Alt-Svc</code> header) — costing a wasted round trip. ` +
+          `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`
+      )
+    );
+    return;
+  }
+
+  const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
+  target.append(
+    hasH3
+      ? verdict(
+          "ok",
+          "HTTPS record found — advertises h3 ✓",
+          `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
+            `No round trip wasted.`
+        )
+      : verdict(
+          "warn",
+          "HTTPS record found — but no h3 in ALPN",
+          `The record exists but doesn't list <code>h3</code>, so clients won't ` +
+            `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`
+        )
+  );
+
+  out.records.forEach((r, i) => {
+    const p = r.params;
+    const facts = el("ul", "facts");
+    const row = (k, v) =>
+      facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${v}</span>`));
+
+    if (out.records.length > 1) row("record", `#${i + 1}`);
+    row("priority", String(r.priority));
+    row("target", `<code>${r.target}</code>${r.target === "." ? " <span class=\"dim\">(same as owner)</span>" : ""}`);
+    if (p.alpn) row("alpn", pills(p.alpn, (x) => x === "h3"));
+    if (p["no-default-alpn"]) row("no-default-alpn", "set");
+    if (p.port != null) row("port", String(p.port));
+    if (p.ipv4hint) row("ipv4hint", pills(p.ipv4hint));
+    if (p.ipv6hint) row("ipv6hint", pills(p.ipv6hint));
+    row("ech", p.ech ? `<span class="val">configured (${p.ech} bytes) ✓</span>` : "<span class=\"dim\">not set</span>");
+
+    const card = el("div", "verdict-card");
+    card.append(facts);
+    target.append(card);
+  });
+}
+
+function verdict(kind, title, sub) {
+  const c = el("div", `verdict-card ${kind}`);
+  c.append(el("div", "v-title", title));
+  c.append(el("div", "v-sub", sub));
+  return c;
+}
+
+/* ---- wire-up ---- */
+
+function init() {
+  const form = document.getElementById("lookup-form");
+  const input = document.getElementById("domain");
+  const btn = document.getElementById("go");
+  const result = document.getElementById("result");
+  if (!form) return;
+
+  async function run(domain) {
+    domain = (domain || "").trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (!domain) return;
+    input.value = domain;
+    btn.disabled = true;
+    result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
+    try {
+      const out = await lookup(domain);
+      render(domain, out, result);
+    } catch (e) {
+      result.innerHTML = "";
+      result.append(
+        verdict("err", "Lookup failed", `Couldn't reach the DoH endpoint: ${e.message}`)
+      );
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    run(input.value);
+  });
+
+  document.querySelectorAll("[data-example]").forEach((a) =>
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      run(a.dataset.example);
+    })
+  );
+
+  // deep-link: #lookup=example.com
+  const m = location.hash.match(/lookup=([^&]+)/);
+  if (m) run(decodeURIComponent(m[1]));
+}
+
+document.addEventListener("DOMContentLoaded", init);
