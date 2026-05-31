@@ -7,6 +7,6 @@
   "https_rr_count": null,
   "alt_svc_without_https_rr_count": null,
   "alt_svc_without_https_rr_pct": null,
-  "caption": "of measured sites send <code>Alt-Svc: h3</code> but publish <b>no HTTPS DNS record</b> — every first connection to them takes a round trip it didn't have to.",
-  "source": "measurement pipeline pending — number is a placeholder"
+  "caption": "of measured sites send <code>Alt-Svc: h3</code> but publish <b>no HTTPS DNS record</b>. Every first connection to them takes a round trip it didn't have to.",
+  "source": "measurement pipeline pending; number is a placeholder"
 }

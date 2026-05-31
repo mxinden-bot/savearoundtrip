@@ -1,4 +1,4 @@
-/* savearoundtrip — live HTTPS-RR lookup via Cloudflare DNS-over-HTTPS.
+/* savearoundtrip: live HTTPS-RR lookup via Cloudflare DNS-over-HTTPS.
  *
  * Cloudflare's DoH JSON endpoint returns type-65 (HTTPS) records as RFC 3597
  * "generic" RDATA, e.g.  "\# 61 00 01 00 00 01 00 06 02 68 33 ..."
@@ -8,7 +8,7 @@
 const DOH = "https://cloudflare-dns.com/dns-query";
 const TYPE_HTTPS = 65;
 
-// SvcParamKeys — RFC 9460 §14.3.2 (+ the `ech` key).
+// SvcParamKeys: RFC 9460 §14.3.2 (+ the `ech` key).
 const SVC_KEYS = {
   0: "mandatory",
   1: "alpn",
@@ -167,7 +167,7 @@ function render(domain, out, target) {
         "No HTTPS record published",
         `<code>${domain}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
           `can only discover that <i>after</i> a first connection (e.g. via an ` +
-          `<code>Alt-Svc</code> header) — costing a wasted round trip. ` +
+          `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
           `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`
       )
     );
@@ -179,13 +179,13 @@ function render(domain, out, target) {
     hasH3
       ? verdict(
           "ok",
-          "HTTPS record found — advertises h3 ✓",
+          "HTTPS record found: advertises h3 ✓",
           `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
             `No round trip wasted.`
         )
       : verdict(
           "warn",
-          "HTTPS record found — but no h3 in ALPN",
+          "HTTPS record found, but no h3 in ALPN",
           `The record exists but doesn't list <code>h3</code>, so clients won't ` +
             `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`
         )

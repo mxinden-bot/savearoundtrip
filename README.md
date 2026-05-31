@@ -2,7 +2,7 @@
 
 A small, geeky, single-page site advocating for publishing **HTTPS DNS
 resource records** (RFC 9460) so browsers can discover HTTP/3 and connect
-optimally on the *first* connection — instead of wasting a round trip
+optimally on the *first* connection, instead of wasting a round trip
 re-connecting after reading an `Alt-Svc` header.
 
 > Many sites send `Alt-Svc: h3=":443"` but publish **no HTTPS RR**. That means
@@ -43,7 +43,7 @@ RFC 3597 generic `\# <len> <hex>` form) to show:
 
 > Note on `Alt-Svc`: a page can't read another origin's response headers from
 > the browser (CORS forbids it), so the in-browser tool focuses on what *is*
-> observable client-side — the DNS record. The "Alt-Svc but no HTTPS RR" gap
+> observable client-side: the DNS record. The "Alt-Svc but no HTTPS RR" gap
 > is the job of the offline measurement pipeline (see below).
 
 ## Why HTTPS RR beats Alt-Svc (the short version)
@@ -51,7 +51,7 @@ RFC 3597 generic `\# <len> <hex>` form) to show:
 | | `Alt-Svc` header (RFC 7838) | HTTPS RR (RFC 9460) |
 |---|---|---|
 | When is it learned? | *After* a full TCP+TLS+HTTP connection | During DNS resolution, *before* connecting |
-| First-connection h3? | No — needs a prior connection | **Yes** |
+| First-connection h3? | No, needs a prior connection | **Yes** |
 | Carries IP hints? | No | **Yes** (`ipv4hint`/`ipv6hint`) |
 | Carries ECH keys? | No | **Yes** (`ech`) |
 | Multiple ALPNs? | One value | **Yes** |
@@ -68,21 +68,21 @@ domain list (Tranco Top 1M is the standard), records per domain:
 1. does it send `Alt-Svc` advertising `h3`?
 2. does it publish an HTTPS RR (and does that RR include `alpn="h3"`)?
 
-The interesting population is **(1) AND NOT (2)** — sites that *want* HTTP/3
+The interesting population is **(1) AND NOT (2)**: sites that *want* HTTP/3
 but force a wasted round trip to get there. The job writes `data/stats.json`;
 the page renders it. Prior art (one-off scans, no live tracker exists):
 
-- Zirngibl, Sattler, Carle — *"A First Look at SVCB and HTTPS DNS Resource
+- Zirngibl, Sattler, Carle: *"A First Look at SVCB and HTTPS DNS Resource
   Records in the Wild"*, WTMC 2023 (TUM).
-- Dong & Zhang et al. — *"Exploring the Ecosystem of DNS HTTPS Resource
+- Dong & Zhang et al.: *"Exploring the Ecosystem of DNS HTTPS Resource
   Records"*, arXiv:2403.15672.
-- APNIC blog, Dec 2023 — one-shot scan of ~227M domains + Tranco Top 1M.
+- APNIC blog, Dec 2023: one-shot scan of ~227M domains + Tranco Top 1M.
 
 ## References
 
-- RFC 9460 — Service Binding and Parameter Specification via the DNS (SVCB / HTTPS RRs)
-- RFC 7838 — HTTP Alternative Services (`Alt-Svc`)
-- RFC 9114 — HTTP/3
-- RFC 8305 — Happy Eyeballs v2
-- draft-ietf-tls-esni — TLS Encrypted Client Hello (ECH)
-- draft-thomson-httpbis-alt-svcb-00 — "HTTP Alternative Services, Plan B"
+- RFC 9460: Service Binding and Parameter Specification via the DNS (SVCB / HTTPS RRs)
+- RFC 7838: HTTP Alternative Services (`Alt-Svc`)
+- RFC 9114: HTTP/3
+- RFC 8305: Happy Eyeballs v2
+- draft-ietf-tls-esni: TLS Encrypted Client Hello (ECH)
+- draft-thomson-httpbis-alt-svcb-00: "HTTP Alternative Services, Plan B"

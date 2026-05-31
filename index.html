@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>savearoundtrip — publish an HTTPS DNS record, skip a round trip</title>
+<title>savearoundtrip: publish an HTTPS DNS record, skip a round trip</title>
 <meta name="description" content="Sites send Alt-Svc: h3 but publish no HTTPS DNS record, so browsers waste a round trip before using HTTP/3. Publish an HTTPS RR (RFC 9460) and connect to QUIC on the first connection.">
 <meta property="og:title" content="savearoundtrip">
 <meta property="og:description" content="Publish an HTTPS DNS record. Let browsers reach HTTP/3 on the first connection instead of wasting a round trip.">
@@ -28,13 +28,15 @@
     <div class="kicker">For sites that already serve HTTP/3</div>
     <h1>You serve <span class="hl">HTTP/3</span>.<br>Let clients use it on the <span class="hl">first connection</span>.</h1>
     <p class="lede">
-      Great — your server already supports HTTP/3. But if the only way you
+      Great. Your server already supports HTTP/3. But if the only way you
       advertise it is the <code>Alt-Svc</code> HTTP header, clients can't see
       that until they have <span class="dim">already connected over HTTP/2</span>.
       So they only switch to HTTP/3 on their <b>second</b> connection. Publish
       an <b>HTTPS DNS record</b> and clients learn you speak HTTP/3 during the
-      DNS lookup — so they connect over HTTP/3 <b>right away</b>, on the first
-      connection. One round trip saved, for free.
+      DNS lookup, so they connect over HTTP/3 <b>right away</b>, on the first
+      connection. And HTTP/3 connects a round trip faster: it runs over QUIC,
+      which folds the transport and TLS handshakes into a single exchange.
+      One round trip to connect, where TCP plus TLS needs two.
     </p>
   </div>
 
@@ -43,10 +45,10 @@
     <div class="big loading" id="metric-num">…</div>
     <div class="cap" id="metric-cap">
       of measured sites send <code>Alt-Svc: h3</code> but publish
-      <b>no HTTPS DNS record</b> — every first connection to them takes a
+      <b>no HTTPS DNS record</b>. Every first connection to them takes a
       round trip it didn't have to.
     </div>
-    <div class="src" id="metric-src">measurement pipeline pending — number is a placeholder</div>
+    <div class="src" id="metric-src">measurement pipeline pending; number is a placeholder</div>
   </div>
 
   <!-- WHY -->
@@ -54,7 +56,7 @@
     <h2>the wasted round trip</h2>
     <p>
       <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
-      is an HTTP response header. To read it, the client must finish a request — which
+      is an HTTP response header. To read it, the client must finish a request, which
       means it has <i>already</i> opened a TCP connection, done a TLS handshake,
       and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
       speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
@@ -62,7 +64,7 @@
 
     <div class="seq">
       <div class="seqcol bad">
-        <h4>Today — HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
+        <h4>Today: HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
         <pre class="mermaid">
 sequenceDiagram
     autonumber
@@ -122,7 +124,7 @@ sequenceDiagram
     <h2>why the HTTPS record is strictly better</h2>
     <p>
       The HTTPS resource record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>,
-      Nov 2023 — same wire format as SVCB) folds everything a client needs to
+      Nov 2023, same wire format as SVCB) folds everything a client needs to
       open the optimal connection into the DNS answer it was already fetching.
       Concretely:
     </p>
@@ -131,7 +133,7 @@ sequenceDiagram
     <p>
       The <code>alpn</code> SvcParam lists the
       <a href="https://www.rfc-editor.org/rfc/rfc7301">ALPN</a> protocol IDs the
-      endpoint speaks — e.g. <code>h3</code> (<a
+      endpoint speaks, e.g. <code>h3</code> (<a
       href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
       <code>h2</code>. Because it arrives during name resolution, the client
       can pick QUIC for its <i>very first</i> connection instead of discovering
@@ -139,19 +141,19 @@ sequenceDiagram
       ALPNs; an <code>Alt-Svc</code> field value carries one protocol each.
     </p>
 
-    <h3>2 · ECH — Encrypted Client Hello (only the DNS can deliver it)</h3>
+    <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
     <p>
       The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
       public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
-      ECH encrypts the TLS ClientHello — including the SNI server name — so a
+      ECH encrypts the TLS ClientHello, including the SNI server name, so a
       network observer can't see which site you're visiting. This is a
       <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
       key <i>before</i> you send the first ClientHello, which is exactly when no
-      connection exists yet. Only an out-of-band channel — the DNS, i.e. the
-      HTTPS record — can bootstrap ECH. No HTTPS RR, no ECH.
+      connection exists yet. Only an out-of-band channel, the DNS (the
+      HTTPS record), can bootstrap ECH. No HTTPS RR, no ECH.
     </p>
 
-    <h3>3 · IP hints — connect without a second lookup race</h3>
+    <h3>3 · IP hints: connect without a second lookup race</h3>
     <p>
       <code>ipv4hint</code> and <code>ipv6hint</code> ship candidate addresses
       inside the HTTPS answer. The client can start connecting immediately and
@@ -164,7 +166,7 @@ sequenceDiagram
     <h3>4 · Aliasing at the zone apex, no CNAME hacks</h3>
     <p>
       In <i>AliasMode</i> (priority&nbsp;0) an HTTPS record redirects the apex of
-      a zone — <code>example.com</code> itself — to another target, something a
+      a zone, <code>example.com</code> itself, to another target, something a
       <code>CNAME</code> can't legally do at the apex. <i>ServiceMode</i>
       (priority&nbsp;&ge;&nbsp;1) carries the connection parameters above. One
       record type does load-distribution, failover, and parameter delivery.
@@ -174,7 +176,7 @@ sequenceDiagram
     <p>
       Reachability lives in the DNS with a normal TTL, instead of being smeared
       across per-origin HTTP-header caches with the <code>max-age</code> dilemma
-      described above. The browser was going to do a DNS lookup anyway — this
+      described above. The browser was going to do a DNS lookup anyway; this
       just makes that lookup carry the answer.
     </p>
 
@@ -186,9 +188,9 @@ sequenceDiagram
         <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
         <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
         <tr><td>multiple ALPNs</td><td class="no">one per value</td><td class="yes">yes</td></tr>
-        <tr><td>IP hints</td><td class="no">—</td><td class="yes">ipv4hint / ipv6hint</td></tr>
+        <tr><td>IP hints</td><td class="no">n/a</td><td class="yes">ipv4hint / ipv6hint</td></tr>
         <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
-        <tr><td>apex redirection</td><td class="no">—</td><td class="yes">AliasMode</td></tr>
+        <tr><td>apex redirection</td><td class="no">n/a</td><td class="yes">AliasMode</td></tr>
         <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
       </tbody>
     </table>
@@ -200,7 +202,7 @@ sequenceDiagram
     <p class="dim">
       Queries Cloudflare's DNS-over-HTTPS endpoint for the
       <code>HTTPS</code> (type&nbsp;65) record, live, from your browser, and
-      decodes the SVCB wire format. Nothing is sent to a server of ours — there
+      decodes the SVCB wire format. Nothing is sent to a server of ours; there
       isn't one.
     </p>
     <div class="tool">
@@ -222,7 +224,7 @@ sequenceDiagram
       <div id="result"></div>
     </div>
     <p class="dim" style="font-size:12.5px;margin-top:14px">
-      Can't I just check <code>Alt-Svc</code> too? Not from a web page — CORS
+      Can't I just check <code>Alt-Svc</code> too? Not from a web page. CORS
       forbids reading another origin's response headers in the browser. Spotting
       "<code>Alt-Svc</code> but no HTTPS&nbsp;RR" needs an offline scan; that's
       what the headline number is for.
@@ -249,7 +251,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
   <footer>
     <div>
       A nudge toward a faster, more private web. No tracking, no cookies, no
-      server — just static files and a DNS query you make yourself.
+      server. Just static files and a DNS query you make yourself.
     </div>
     <div class="refs">
       <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
