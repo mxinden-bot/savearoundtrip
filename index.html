@@ -25,15 +25,16 @@
   </header>
 
   <div class="hero">
-    <div class="kicker">HTTP/3 · QUIC · SVCB/HTTPS DNS records · RFC 9460</div>
-    <h1>Your site says <span class="hl">Alt-Svc: h3</span>.<br>Your DNS doesn't.<br>That costs a <span class="hl">round trip</span>.</h1>
+    <div class="kicker">For sites that already serve HTTP/3</div>
+    <h1>You serve <span class="hl">HTTP/3</span>.<br>Let clients use it on the <span class="hl">first connection</span>.</h1>
     <p class="lede">
-      Plenty of sites advertise HTTP/3 with an <code>Alt-Svc</code> HTTP response
-      header — but a browser can only read that HTTP header <span class="dim">after</span> it has
-      already connected over TCP+TLS. So the first connection never uses HTTP/3.
-      Publish an <b>HTTPS DNS record</b> with <code>alpn="h3"</code> and the
-      client goes straight to QUIC on connection&nbsp;#1. One less round trip,
-      for free.
+      Great — your server already supports HTTP/3. But if the only way you
+      advertise it is the <code>Alt-Svc</code> HTTP header, clients can't see
+      that until they have <span class="dim">already connected over HTTP/2</span>.
+      So they only switch to HTTP/3 on their <b>second</b> connection. Publish
+      an <b>HTTPS DNS record</b> and clients learn you speak HTTP/3 during the
+      DNS lookup — so they connect over HTTP/3 <b>right away</b>, on the first
+      connection. One round trip saved, for free.
     </p>
   </div>
 
@@ -59,27 +60,46 @@
       speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
     </p>
 
-    <div class="rtt">
-      <div class="col bad">
-        <h4>Alt-Svc only — no HTTPS RR</h4>
-        <ol>
-          <li>DNS: resolve <b>A</b>/<b>AAAA</b></li>
-          <li>TCP handshake (1 RTT)</li>
-          <li>TLS 1.3 handshake (1 RTT)</li>
-          <li>HTTP/2 request → response carries <b>Alt-Svc: h3</b></li>
-          <li><span class="dim">… now, and only now, the client knows about h3</span></li>
-          <li>It uses HTTP/3 on some <b>future</b> connection</li>
-        </ol>
-        <div class="verdict">First visit never touches QUIC.</div>
+    <div class="seq">
+      <div class="seqcol bad">
+        <h4>Today — HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant D as DNS
+    participant S as Your server
+    Note over C,S: First connection
+    C->>D: look up A / AAAA
+    D-->>C: IP address
+    C->>S: TCP + TLS handshake
+    S-->>C: connected (HTTP/2)
+    C->>S: HTTP/2 request
+    S-->>C: response + Alt-Svc: h3
+    Note over C,S: only now does the client learn you speak HTTP/3
+    Note over C,S: Second connection
+    C->>S: QUIC + HTTP/3 handshake
+    S-->>C: connected (HTTP/3)
+        </pre>
+        <div class="verdict">HTTP/3 only on the second connection.</div>
       </div>
-      <div class="col good">
-        <h4>HTTPS DNS record published</h4>
-        <ol>
-          <li>DNS: resolve <b>HTTPS</b> RR → <b>alpn="h3"</b> + IP hints</li>
-          <li>QUIC handshake straight away (1 RTT, even 0-RTT)</li>
-          <li>HTTP/3 request</li>
-        </ol>
-        <div class="verdict">First visit is HTTP/3. Round trip saved.</div>
+      <div class="seqcol good">
+        <h4>With an HTTPS DNS record</h4>
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant D as DNS
+    participant S as Your server
+    Note over C,S: First connection
+    C->>D: look up HTTPS record
+    D-->>C: alpn=h3 + IP hints (+ ECH)
+    C->>S: QUIC + HTTP/3 handshake
+    S-->>C: connected (HTTP/3)
+    C->>S: HTTP/3 request
+    S-->>C: response
+        </pre>
+        <div class="verdict">HTTP/3 right away, on the first connection.</div>
       </div>
     </div>
 
@@ -263,5 +283,24 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     });
 </script>
 <script src="js/lookup.js"></script>
+<script type="module">
+  // Mermaid renders the two sequence diagrams. Loaded from a CDN, so the
+  // diagrams need network + JS; if it fails the raw diagram source stays
+  // visible as a readable fallback.
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: dark ? "dark" : "default",
+    securityLevel: "loose",
+    fontFamily: "var(--mono)",
+    sequence: { useMaxWidth: true, mirrorActors: false },
+  });
+  try {
+    await mermaid.run({ querySelector: ".mermaid" });
+  } catch (e) {
+    /* leave the source text visible */
+  }
+</script>
 </body>
 </html>

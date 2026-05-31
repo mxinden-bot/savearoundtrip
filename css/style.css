@@ -125,22 +125,25 @@ ul.tick li::before {
   content: "→"; position: absolute; left: 0; color: var(--accent);
 }
 
-/* ---- the round-trip diagram ---- */
-.rtt { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
-@media (max-width: 640px) { .rtt { grid-template-columns: 1fr; } }
-.rtt .col {
-  border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px;
-  background: var(--bg-inset); font-size: 13.5px;
+/* ---- the round-trip sequence diagrams (mermaid) ---- */
+.seq { display: grid; gap: 18px; margin: 20px 0; }
+.seqcol {
+  border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
+  padding: 16px 18px; background: var(--bg-inset);
 }
-.rtt .col h4 { margin: 0 0 12px; font-size: 13px; letter-spacing: .04em; }
-.rtt .col.bad h4 { color: var(--warn); }
-.rtt .col.good h4 { color: var(--accent); }
-.rtt ol { margin: 0; padding-left: 20px; color: var(--fg-dim); }
-.rtt ol li { margin-bottom: 5px; }
-.rtt ol li b { color: var(--fg); font-weight: 600; }
-.rtt .verdict { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); color: var(--fg); }
-.rtt .col.bad .verdict { color: var(--warn); }
-.rtt .col.good .verdict { color: var(--accent); }
+.seqcol.bad  { border-left-color: var(--warn); }
+.seqcol.good { border-left-color: var(--accent); }
+.seqcol h4 { margin: 0 0 14px; font-size: 13px; letter-spacing: .04em; }
+.seqcol.bad h4  { color: var(--warn); }
+.seqcol.good h4 { color: var(--accent); }
+/* before mermaid runs, .mermaid is a <pre>; reset the code-block chrome */
+.seqcol .mermaid {
+  background: none; border: 0; padding: 0; margin: 0; overflow-x: auto;
+  text-align: center; color: var(--fg-faint); font-size: 12px; line-height: 1.45;
+}
+.seqcol .verdict { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.seqcol.bad .verdict  { color: var(--warn); }
+.seqcol.good .verdict { color: var(--accent); }
 
 /* ---- comparison table ---- */
 .cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0 16px; }
