@@ -28,8 +28,8 @@
     <div class="kicker">HTTP/3 · QUIC · SVCB/HTTPS DNS records · RFC 9460</div>
     <h1>Your site says <span class="hl">Alt-Svc: h3</span>.<br>Your DNS doesn't.<br>That costs a <span class="hl">round trip</span>.</h1>
     <p class="lede">
-      Plenty of sites advertise HTTP/3 with an <code>Alt-Svc</code> header — but
-      a browser can only read that header <span class="dim">after</span> it has
+      Plenty of sites advertise HTTP/3 with an <code>Alt-Svc</code> HTTP response
+      header — but a browser can only read that HTTP header <span class="dim">after</span> it has
       already connected over TCP+TLS. So the first connection never uses HTTP/3.
       Publish an <b>HTTPS DNS record</b> with <code>alpn="h3"</code> and the
       client goes straight to QUIC on connection&nbsp;#1. One less round trip,
@@ -53,7 +53,7 @@
     <h2>the wasted round trip</h2>
     <p>
       <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
-      is a response header. To read it, the client must finish a request — which
+      is an HTTP response header. To read it, the client must finish a request — which
       means it has <i>already</i> opened a TCP connection, done a TLS handshake,
       and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
       speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
@@ -125,7 +125,7 @@
       public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
       ECH encrypts the TLS ClientHello — including the SNI server name — so a
       network observer can't see which site you're visiting. This is a
-      <b>chicken-and-egg</b> problem the header can't solve: you need the public
+      <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
       key <i>before</i> you send the first ClientHello, which is exactly when no
       connection exists yet. Only an out-of-band channel — the DNS, i.e. the
       HTTPS record — can bootstrap ECH. No HTTPS RR, no ECH.
@@ -153,14 +153,14 @@
     <h3>5 · One authoritative source, sane caching</h3>
     <p>
       Reachability lives in the DNS with a normal TTL, instead of being smeared
-      across per-origin header caches with the <code>max-age</code> dilemma
+      across per-origin HTTP-header caches with the <code>max-age</code> dilemma
       described above. The browser was going to do a DNS lookup anyway — this
       just makes that lookup carry the answer.
     </p>
 
     <table class="cmp">
       <thead>
-        <tr><th>capability</th><th>Alt-Svc header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
+        <tr><th>capability</th><th>Alt-Svc HTTP header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
       </thead>
       <tbody>
         <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
@@ -169,7 +169,7 @@
         <tr><td>IP hints</td><td class="no">—</td><td class="yes">ipv4hint / ipv6hint</td></tr>
         <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
         <tr><td>apex redirection</td><td class="no">—</td><td class="yes">AliasMode</td></tr>
-        <tr><td>source of truth</td><td class="no">header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
+        <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
       </tbody>
     </table>
   </section>
