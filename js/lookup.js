@@ -137,7 +137,7 @@ async function lookup(domain) {
   const records = [];
   for (const a of answers) {
     const bytes = parseGeneric(a.data);
-    if (bytes) records.push(parseSvcb(bytes));
+    if (bytes) records.push({ ...parseSvcb(bytes), ttl: a.TTL });
   }
   return { status: json.Status, records, raw: answers };
 }
@@ -157,6 +157,40 @@ function pills(arr, hot) {
     .join("");
 }
 
+// A ready-to-paste BIND-style record for a domain that's missing h3.
+function zoneSnippet(domain) {
+  return `${domain}.  3600  IN  HTTPS  1 . alpn="h3,h2"`;
+}
+
+function publishHint(domain) {
+  const wrap = el("div", "publish-hint");
+  wrap.append(el("div", "ph-label", "Publish this (tune the TTL, add IP hints / ECH as needed):"));
+  const pre = el("pre", "ph-pre");
+  pre.append(
+    el(
+      "code",
+      null,
+      `<span class="tok-com">; BIND-style zone file</span>\n` +
+        `${domain}.  3600  IN  <span class="tok-key">HTTPS</span> ` +
+        `<span class="tok-val">1 . alpn="h3,h2"</span>`
+    )
+  );
+  wrap.append(pre);
+  const btn = el("button", "copy-btn", "copy");
+  btn.type = "button";
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(zoneSnippet(domain));
+      btn.textContent = "copied ✓";
+    } catch {
+      btn.textContent = "copy failed";
+    }
+    setTimeout(() => (btn.textContent = "copy"), 1500);
+  });
+  wrap.append(btn);
+  return wrap;
+}
+
 function render(domain, out, target) {
   target.innerHTML = "";
 
@@ -168,28 +202,46 @@ function render(domain, out, target) {
         `<code>${domain}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
           `can only discover that <i>after</i> a first connection (e.g. via an ` +
           `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
-          `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`
+          `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`,
+        publishHint(domain)
       )
     );
     return;
   }
 
+  const aliasOnly = out.records.every((r) => r.priority === 0);
   const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
-  target.append(
-    hasH3
-      ? verdict(
-          "ok",
-          "HTTPS record found: advertises h3 ✓",
-          `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
-            `No round trip wasted.`
-        )
-      : verdict(
-          "warn",
-          "HTTPS record found, but no h3 in ALPN",
-          `The record exists but doesn't list <code>h3</code>, so clients won't ` +
-            `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`
-        )
-  );
+
+  if (aliasOnly) {
+    target.append(
+      verdict(
+        "warn",
+        "HTTPS record is an alias (AliasMode)",
+        `This is a priority-0 AliasMode record pointing at ` +
+          `<code>${out.records[0].target}</code>. The h3 / ECH / hint parameters ` +
+          `live on the HTTPS record at that target, not here.`
+      )
+    );
+  } else if (hasH3) {
+    target.append(
+      verdict(
+        "ok",
+        "HTTPS record found: advertises h3 ✓",
+        `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
+          `No round trip wasted.`
+      )
+    );
+  } else {
+    target.append(
+      verdict(
+        "warn",
+        "HTTPS record found, but no h3 in ALPN",
+        `The record exists but doesn't list <code>h3</code>, so clients won't ` +
+          `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`,
+        publishHint(domain)
+      )
+    );
+  }
 
   out.records.forEach((r, i) => {
     const p = r.params;
@@ -198,7 +250,7 @@ function render(domain, out, target) {
       facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${v}</span>`));
 
     if (out.records.length > 1) row("record", `#${i + 1}`);
-    row("priority", String(r.priority));
+    row("mode", r.priority === 0 ? "0 (AliasMode)" : `${r.priority} (ServiceMode)`);
     row("target", `<code>${r.target}</code>${r.target === "." ? " <span class=\"dim\">(same as owner)</span>" : ""}`);
     if (p.alpn) row("alpn", pills(p.alpn, (x) => x === "h3"));
     if (p["no-default-alpn"]) row("no-default-alpn", "set");
@@ -206,6 +258,7 @@ function render(domain, out, target) {
     if (p.ipv4hint) row("ipv4hint", pills(p.ipv4hint));
     if (p.ipv6hint) row("ipv6hint", pills(p.ipv6hint));
     row("ech", p.ech ? `<span class="val">configured (${p.ech} bytes) ✓</span>` : "<span class=\"dim\">not set</span>");
+    if (r.ttl != null) row("ttl", `${r.ttl}s`);
 
     const card = el("div", "verdict-card");
     card.append(facts);
@@ -213,10 +266,11 @@ function render(domain, out, target) {
   });
 }
 
-function verdict(kind, title, sub) {
+function verdict(kind, title, sub, extra) {
   const c = el("div", `verdict-card ${kind}`);
   c.append(el("div", "v-title", title));
   c.append(el("div", "v-sub", sub));
+  if (extra) c.append(extra);
   return c;
 }
 
@@ -230,10 +284,25 @@ function init() {
   if (!form) return;
 
   async function run(domain) {
-    domain = (domain || "").trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    domain = (domain || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+      .replace(/\.$/, "");
     if (!domain) return;
     input.value = domain;
+
+    if (!/^([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(domain)) {
+      result.innerHTML = "";
+      result.append(
+        verdict("err", "That doesn't look like a domain", "Try something like <code>example.com</code>.")
+      );
+      return;
+    }
+
     btn.disabled = true;
+    result.setAttribute("aria-busy", "true");
     result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
     try {
       const out = await lookup(domain);
@@ -245,6 +314,7 @@ function init() {
       );
     } finally {
       btn.disabled = false;
+      result.setAttribute("aria-busy", "false");
     }
   }
 

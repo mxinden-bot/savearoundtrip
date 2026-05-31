@@ -8,6 +8,8 @@
 <meta property="og:title" content="savearoundtrip">
 <meta property="og:description" content="Publish an HTTPS DNS record. Let browsers reach HTTP/3 on the first connection instead of wasting a round trip.">
 <meta property="og:type" content="website">
+<meta name="theme-color" content="#0d0f12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f5" media="(prefers-color-scheme: light)">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>⏱️</text></svg>">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -21,6 +23,7 @@
       <a href="#how">how</a>
       <a href="#check">check a domain</a>
       <a href="#publish">publish</a>
+      <a href="#faq">faq</a>
     </nav>
   </header>
 
@@ -207,10 +210,11 @@ sequenceDiagram
     <div class="tool">
       <form id="lookup-form">
         <div class="prompt">
-          <span class="ps1">dig HTTPS</span>
+          <span class="ps1" aria-hidden="true">dig HTTPS</span>
           <input id="domain" type="text" placeholder="example.com" autocomplete="off"
-                 autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url">
-          <button id="go" type="submit">look up</button>
+                 autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url"
+                 aria-label="Domain to look up">
+          <button id="go" type="submit" aria-label="Look up HTTPS record">look up</button>
         </div>
       </form>
       <div class="examples">
@@ -220,7 +224,12 @@ sequenceDiagram
         <a href="#" data-example="github.com">github.com</a>
         <a href="#" data-example="example.com">example.com</a>
       </div>
-      <div id="result"></div>
+      <div id="result" role="status" aria-live="polite"></div>
+      <noscript>
+        <div class="noscript">This live checker needs JavaScript. You can run the
+          same query yourself: <code>dig +short HTTPS example.com</code> (or
+          <code>kdig</code> / <code>dog</code>).</div>
+      </noscript>
     </div>
     <p class="dim" style="font-size:12.5px;margin-top:14px">
       Can't I just check <code>Alt-Svc</code> too? Not from a web page. CORS
@@ -245,6 +254,47 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <li>Most managed DNS providers (Cloudflare, Route&nbsp;53, etc.) expose an HTTPS/SVCB record type directly.</li>
       <li>Verify it: paste your domain into the <a href="#check">checker above</a>.</li>
     </ul>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <h2>faq</h2>
+
+    <h3>Does my CDN publish this automatically?</h3>
+    <p>
+      Some do. Cloudflare, for one, serves an HTTPS record with
+      <code>alpn="h3"</code> automatically for proxied zones. Others leave it to
+      you. The quickest way to find out is to <a href="#check">check your domain</a>
+      above.
+    </p>
+
+    <h3>Will an HTTPS record break older clients?</h3>
+    <p>
+      No. A client that doesn't understand HTTPS records just ignores them and
+      falls back to ordinary A/AAAA lookups (and your <code>Alt-Svc</code> header,
+      if you still send it). Publishing one is strictly additive.
+    </p>
+
+    <h3>Apex or <code>www</code>?</h3>
+    <p>
+      Publish it on the name people actually connect to. If that's the apex
+      (<code>example.com</code>), an HTTPS record works there directly. No CNAME
+      tricks needed.
+    </p>
+
+    <h3>What about repeat visits?</h3>
+    <p>
+      Even better: once a client has spoken HTTP/3 with you, a return visit can
+      resume the QUIC connection in <b>0-RTT</b>, putting the first request on
+      the wire with no handshake round trip at all.
+    </p>
+
+    <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
+    <p>
+      Not yet. Keep sending it as a fallback for clients that didn't get the
+      HTTPS record. The record just means the common case stops paying a round
+      trip to discover what DNS could have told it up front.
+    </p>
   </section>
 
   <footer>
@@ -285,22 +335,45 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 </script>
 <script src="js/lookup.js"></script>
 <script type="module">
-  // Mermaid renders the two sequence diagrams. Loaded from a CDN, so the
-  // diagrams need network + JS; if it fails the raw diagram source stays
-  // visible as a readable fallback.
-  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: dark ? "dark" : "default",
-    securityLevel: "loose",
-    fontFamily: "var(--mono)",
-    sequence: { useMaxWidth: true, mirrorActors: false },
-  });
-  try {
-    await mermaid.run({ querySelector: ".mermaid" });
-  } catch (e) {
-    /* leave the source text visible */
+  // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
+  // only fetch it once the diagrams are about to scroll into view. If it never
+  // loads, the raw diagram source stays visible as a readable fallback.
+  let loaded = false;
+  async function renderDiagrams() {
+    if (loaded) return;
+    loaded = true;
+    try {
+      const { default: mermaid } = await import(
+        "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
+      );
+      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: dark ? "dark" : "default",
+        securityLevel: "loose",
+        fontFamily: "var(--mono)",
+        sequence: { useMaxWidth: true, mirrorActors: false },
+      });
+      await mermaid.run({ querySelector: ".mermaid" });
+    } catch (e) {
+      /* leave the source text visible */
+    }
+  }
+
+  const seq = document.querySelector(".seq");
+  if (seq && "IntersectionObserver" in window) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          renderDiagrams();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    io.observe(seq);
+  } else {
+    renderDiagrams();
   }
 </script>
 </body>
