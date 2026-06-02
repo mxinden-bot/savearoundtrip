@@ -167,10 +167,10 @@ sequenceDiagram
 
     <h3>4 · Aliasing at the zone apex, no CNAME hacks</h3>
     <p>
-      In <i>AliasMode</i> (priority&nbsp;0) an HTTPS record redirects the apex of
+      In <i>AliasMode</i> (mode&nbsp;0) an HTTPS record can redirect the apex of
       a zone, <code>example.com</code> itself, to another target, something a
-      <code>CNAME</code> can't legally do at the apex. <i>ServiceMode</i>
-      (priority&nbsp;&ge;&nbsp;1) carries the connection parameters above. One
+      <code>CNAME</code> can't legally do. <i>ServiceMode</i>
+      (mode&nbsp;&ge;&nbsp;1) carries the connection parameters above. One
       record type does load-distribution, failover, and parameter delivery.
     </p>
 
@@ -249,7 +249,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 <span class="tok-com">; add ECH once you have an ECHConfigList:</span>
 <span class="tok-com">;   ... alpn="h3,h2" ech="AED+DQBA..." ipv4hint=...</span></code></pre>
     <ul class="tick">
-      <li>Priority <code>1</code> = ServiceMode (carries params). <code>0</code> = AliasMode.</li>
+      <li>Mode <code>1</code> = ServiceMode (carries params). <code>0</code> = AliasMode.</li>
       <li><code>.</code> as the target means "same name as the owner".</li>
       <li>Most managed DNS providers (Cloudflare, Route&nbsp;53, etc.) expose an HTTPS/SVCB record type directly.</li>
       <li>Verify it: paste your domain into the <a href="#check">checker above</a>.</li>
