@@ -55,12 +55,6 @@
   <!-- CHECK -->
   <section id="check">
     <h2>check a domain</h2>
-    <p class="dim">
-      Queries Cloudflare's DNS-over-HTTPS endpoint for the
-      <code>HTTPS</code> (type&nbsp;65) record, live, from your browser, and
-      decodes the SVCB wire format. Nothing is sent to a server of ours; there
-      isn't one.
-    </p>
     <div class="tool">
       <form id="lookup-form">
         <div class="prompt">
@@ -85,6 +79,11 @@
           <code>kdig</code> / <code>dog</code>).</div>
       </noscript>
     </div>
+    <p class="dim" style="font-size:12.5px;margin-top:14px">
+      Queries Cloudflare's DNS-over-HTTPS endpoint for the <code>HTTPS</code>
+      (type&nbsp;65) record, live, from your browser, and decodes the SVCB wire
+      format. Nothing is sent to a server of ours; there isn't one.
+    </p>
     <p class="dim" style="font-size:12.5px;margin-top:14px">
       Can't I just check <code>Alt-Svc</code> too? Not from a web page. CORS
       forbids reading another origin's response headers in the browser. Spotting
