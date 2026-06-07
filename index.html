@@ -31,15 +31,16 @@
   <div class="hero">
     <h1>You serve your site via <span class="hl">HTTP/3</span>.<br>Let clients use it on the <span class="hl">first connection</span> and save a round trip.</h1>
     <p class="lede">
-      Great. Your server already supports HTTP/3. But if the only way you
-      advertise it is the <code>Alt-Svc</code> HTTP header, clients can't see
-      that until they have <span class="dim">already connected over HTTP/2</span>.
-      So they only switch to HTTP/3 on their <b>second</b> connection. Publish
-      an <b>HTTPS DNS record</b> and clients learn you speak HTTP/3 during the
-      DNS lookup, so they connect over HTTP/3 <b>right away</b>, on the first
-      connection. And HTTP/3 connects a round trip faster: it runs over QUIC,
-      which folds the transport and TLS handshakes into a single exchange.
-      One round trip to connect, where TCP plus TLS needs two.
+      If your site serves HTTP/3, there are two ways a browser can find that
+      out: the <code>Alt-Svc</code> HTTP header, which it can only read
+      <span class="dim">after</span> it has already connected over HTTP/2, or an
+      <b>HTTPS DNS record</b>, which it reads <span class="dim">before</span>
+      connecting. Advertise only via the header and clients reach HTTP/3 only on
+      their <b>second</b> connection. Publish an HTTPS record and they connect
+      over HTTP/3 <b>right away</b>, on the first one. And HTTP/3 connects a
+      round trip faster anyway: it runs over QUIC, which folds the transport and
+      TLS handshakes into a single exchange, one round trip where TCP plus TLS
+      needs two.
     </p>
   </div>
 
@@ -203,20 +204,39 @@ sequenceDiagram
   <!-- DATA (real-browser numbers from GLAM) -->
   <section id="data">
     <h2>from real browsers</h2>
-    <p class="dim">
+    <p>
+      <span class="badge">Firefox Nightly</span>
       Not a model and not a scan of ours: this is Firefox itself reporting, via
       Mozilla's public <a href="https://glam.telemetry.mozilla.org/">GLAM</a>
-      telemetry, how it discovered HTTP/3 and what the HTTPS records it saw
-      contained. (Firefox Nightly; refreshed daily.)
+      telemetry, how it discovered HTTP/3. <b>These numbers are Firefox Nightly
+      only</b>, the only channel carrying these measurements today.
     </p>
+    <p>
+      A browser can learn that a server speaks HTTP/3 in <b>two</b> ways: from
+      the <code>Alt-Svc</code> HTTP response header (seen only after it has
+      already connected), or from an <b>HTTPS DNS record</b> (seen before
+      connecting). So every connection falls into one of four groups:
+    </p>
+    <ul class="tick">
+      <li><b>Neither</b>: HTTP/3 was not advertised at all.</li>
+      <li><b>Alt-Svc only</b>: advertised, but only in the header, so the first connection could not use it.</li>
+      <li><b>HTTPS record only</b>: advertised in DNS, so the first connection could go straight to HTTP/3.</li>
+      <li><b>Both</b>: advertised in DNS and the header.</li>
+    </ul>
 
     <h3>How Firefox discovered HTTP/3</h3>
+    <div class="statgrid" id="stats-h3"></div>
     <div id="chart-h3" class="bars"></div>
     <p class="chart-cap">
-      Share of measured connections. <b>altsvc_only</b> is the gap: the server
-      speaks HTTP/3 but only said so in an <code>Alt-Svc</code> header, so the
-      first connection missed it. <b>both</b> and <b>https_rr_only</b> had a
-      usable HTTPS record; <b>none</b> did not offer h3 at all.
+      Share of measured connections, Firefox Nightly. The two right-hand groups
+      had a usable HTTPS record; <b>Alt-Svc only</b> is the gap a record would close.
+    </p>
+
+    <h3>How it is developing over time</h3>
+    <div id="chart-trend"></div>
+    <p class="chart-cap">
+      Each band is one of the four groups, stacked to 100%, per Nightly build.
+      Firefox Nightly only.
     </p>
 
     <h3>What the HTTPS records carried</h3>

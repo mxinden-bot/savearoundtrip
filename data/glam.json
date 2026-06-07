@@ -1,7 +1,7 @@
 {
   "source": "Firefox Nightly, via GLAM",
   "channel": "nightly",
-  "fetched_at": "2026-06-07T07:19:27.334Z",
+  "fetched_at": "2026-06-07T07:40:47.631Z",
   "h3_discovery": {
     "version": 153,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -17,7 +17,105 @@
       "altsvc_only": 72619,
       "none": 75639,
       "both": 49755
-    }
+    },
+    "series": [
+      {
+        "build_id": "2026060209",
+        "date": "2026-06-02",
+        "none": 30.9,
+        "altsvc_only": 29.6,
+        "both": 20.2,
+        "https_rr_only": 19.3
+      },
+      {
+        "build_id": "2026060217",
+        "date": "2026-06-02",
+        "none": 27.4,
+        "altsvc_only": 26.7,
+        "both": 23.5,
+        "https_rr_only": 22.3
+      },
+      {
+        "build_id": "2026060221",
+        "date": "2026-06-02",
+        "none": 31.1,
+        "altsvc_only": 29.9,
+        "both": 20,
+        "https_rr_only": 19.1
+      },
+      {
+        "build_id": "2026060306",
+        "date": "2026-06-03",
+        "none": 27.1,
+        "altsvc_only": 26,
+        "both": 22.9,
+        "https_rr_only": 24
+      },
+      {
+        "build_id": "2026060309",
+        "date": "2026-06-03",
+        "none": 30.8,
+        "altsvc_only": 29.7,
+        "both": 20.1,
+        "https_rr_only": 19.4
+      },
+      {
+        "build_id": "2026060318",
+        "date": "2026-06-03",
+        "none": 27.7,
+        "altsvc_only": 27.7,
+        "both": 22.8,
+        "https_rr_only": 21.7
+      },
+      {
+        "build_id": "2026060320",
+        "date": "2026-06-03",
+        "none": 30.7,
+        "altsvc_only": 29.3,
+        "both": 20.4,
+        "https_rr_only": 19.6
+      },
+      {
+        "build_id": "2026060323",
+        "date": "2026-06-03",
+        "none": 25,
+        "altsvc_only": 25,
+        "both": 25,
+        "https_rr_only": 25
+      },
+      {
+        "build_id": "2026060403",
+        "date": "2026-06-04",
+        "none": 30.6,
+        "altsvc_only": 29.4,
+        "both": 20.4,
+        "https_rr_only": 19.6
+      },
+      {
+        "build_id": "2026060405",
+        "date": "2026-06-04",
+        "none": 28.9,
+        "altsvc_only": 25.2,
+        "both": 23,
+        "https_rr_only": 23
+      },
+      {
+        "build_id": "2026060501",
+        "date": "2026-06-05",
+        "none": 30.1,
+        "altsvc_only": 29,
+        "both": 20.8,
+        "https_rr_only": 20.1
+      },
+      {
+        "build_id": "2026060509",
+        "date": "2026-06-05",
+        "none": 31.6,
+        "altsvc_only": 29.9,
+        "both": 18.8,
+        "https_rr_only": 19.7
+      }
+    ]
   },
   "https_rr_features": {
     "version": 153,
