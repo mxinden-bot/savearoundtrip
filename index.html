@@ -31,10 +31,9 @@
   <div class="hero">
     <h1>You serve your site via <span class="hl">HTTP/3</span>.<br>Let clients use it on the <span class="hl">first connection</span> and save a round trip.</h1>
     <p class="lede">
-      Browsers discover your HTTP/3 from an <code>Alt-Svc</code> header only
-      <span class="dim">after</span> they have already connected. Put it in an
-      <b>HTTPS DNS record</b> instead, and the very first connection is
-      <span class="hl">HTTP/3</span>.
+      Advertise HTTP/3 support in an <b>HTTPS DNS record</b>, not just an
+      <code>Alt-Svc</code> header, and browsers use it on the
+      <span class="hl">first connection</span>.
     </p>
   </div>
 
