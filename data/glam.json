@@ -1,0 +1,39 @@
+{
+  "source": "Firefox Nightly, via GLAM",
+  "channel": "nightly",
+  "fetched_at": "2026-06-07T07:19:27.334Z",
+  "h3_discovery": {
+    "version": 153,
+    "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
+    "share": {
+      "none": 30.8,
+      "altsvc_only": 29.5,
+      "both": 20.2,
+      "https_rr_only": 19.4
+    },
+    "altsvc_only_of_h3_capable": 42.7,
+    "counts": {
+      "https_rr_only": 47753,
+      "altsvc_only": 72619,
+      "none": 75639,
+      "both": 49755
+    }
+  },
+  "https_rr_features": {
+    "version": 153,
+    "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features/explore?activeBuckets=%5B%22total%22%2C%22h3_alpn%22%2C%22ipv6hint%22%2C%22ipv4hint%22%2C%22ech%22%5D",
+    "share_of_records": {
+      "h3_alpn": 96.4,
+      "ech": 64.3,
+      "ipv4hint": 89.5,
+      "ipv6hint": 88.6
+    },
+    "counts": {
+      "ipv4hint": 49040,
+      "ipv6hint": 48564,
+      "ech": 35225,
+      "total": 54806,
+      "h3_alpn": 52811
+    }
+  }
+}

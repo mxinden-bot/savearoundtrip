@@ -21,6 +21,7 @@
     <nav>
       <a href="#why">why</a>
       <a href="#how">how</a>
+      <a href="#data">data</a>
       <a href="#check">check a domain</a>
       <a href="#publish">publish</a>
       <a href="#faq">faq</a>
@@ -46,11 +47,12 @@
   <div class="metric">
     <div class="big loading" id="metric-num">…</div>
     <div class="cap" id="metric-cap">
-      of measured sites send <code>Alt-Svc: h3</code> but publish
-      <b>no HTTPS DNS record</b>. Every first connection to them takes a
-      round trip it didn't have to.
+      of HTTP/3-capable connections in Firefox reach HTTP/3 only on a
+      <b>later</b> connection: the server advertised h3 only in an
+      <code>Alt-Svc</code> HTTP header, not in DNS. A published HTTPS record
+      would have saved each one a round trip.
     </div>
-    <div class="src" id="metric-src">measurement pipeline pending; number is a placeholder</div>
+    <div class="src" id="metric-src">loading from GLAM...</div>
   </div>
 
   <!-- WHY -->
@@ -198,6 +200,36 @@ sequenceDiagram
     </table>
   </section>
 
+  <!-- DATA (real-browser numbers from GLAM) -->
+  <section id="data">
+    <h2>from real browsers</h2>
+    <p class="dim">
+      Not a model and not a scan of ours: this is Firefox itself reporting, via
+      Mozilla's public <a href="https://glam.telemetry.mozilla.org/">GLAM</a>
+      telemetry, how it discovered HTTP/3 and what the HTTPS records it saw
+      contained. (Firefox Nightly; refreshed daily.)
+    </p>
+
+    <h3>How Firefox discovered HTTP/3</h3>
+    <div id="chart-h3" class="bars"></div>
+    <p class="chart-cap">
+      Share of measured connections. <b>altsvc_only</b> is the gap: the server
+      speaks HTTP/3 but only said so in an <code>Alt-Svc</code> header, so the
+      first connection missed it. <b>both</b> and <b>https_rr_only</b> had a
+      usable HTTPS record; <b>none</b> did not offer h3 at all.
+    </p>
+
+    <h3>What the HTTPS records carried</h3>
+    <div id="chart-feat" class="bars"></div>
+    <p class="chart-cap">
+      Of connections that saw an HTTPS record, the share whose record carried
+      each feature. ECH and the IP hints can only be delivered ahead of the
+      first connection through DNS.
+    </p>
+
+    <p class="chart-cap" id="data-src"></p>
+  </section>
+
   <!-- CHECK -->
   <section id="check">
     <h2>check a domain</h2>
@@ -314,25 +346,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
 </div>
 
-<script>
-  // Headline metric: load from the measurement pipeline output if present.
-  fetch("data/stats.json", { cache: "no-store" })
-    .then((r) => (r.ok ? r.json() : Promise.reject()))
-    .then((s) => {
-      const num = document.getElementById("metric-num");
-      if (s.alt_svc_without_https_rr_pct != null) {
-        num.textContent = s.alt_svc_without_https_rr_pct + "%";
-        num.classList.remove("loading");
-      }
-      if (s.caption) document.getElementById("metric-cap").innerHTML = s.caption;
-      if (s.source) document.getElementById("metric-src").textContent = s.source;
-    })
-    .catch(() => {
-      const num = document.getElementById("metric-num");
-      num.textContent = "??%";
-      num.classList.remove("loading");
-    });
-</script>
+<script src="js/charts.js"></script>
 <script src="js/lookup.js"></script>
 <script type="module">
   // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we

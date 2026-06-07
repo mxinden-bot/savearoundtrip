@@ -1,0 +1,40 @@
+name: refresh GLAM data
+
+# Fetches the Happy Eyeballs telemetry from GLAM server-side (no browser CORS
+# here) and commits data/glam.json so GitHub Pages can serve it as a plain,
+# same-origin file. This is the "no server at visit time" workaround: the only
+# thing that touches GLAM is this scheduled CI job.
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # daily, 06:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-glam
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch GLAM data
+        run: node scripts/fetch-glam.mjs
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- data/glam.json; then
+            echo "no change"
+          else
+            git config user.name "glam-refresh[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/glam.json
+            git commit -m "data: refresh GLAM numbers"
+            git push
+          fi
