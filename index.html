@@ -110,18 +110,6 @@ sequenceDiagram
       </div>
     </div>
 
-    <p class="dim">
-      The IETF itself acknowledges this is the better plan: <a
-      href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
-      ("HTTP Alternative Services, Plan B") proposes treating the DNS as the
-      <i>single source of truth</i> for service reachability, with
-      <code>Alt-Svc</code> demoted to a mere hint to go re-check the DNS. It
-      calls out <code>Alt-Svc</code>'s caching trade-offs (pick a long
-      <code>max-age</code> and clients use stale alternatives; pick a short one
-      and they fall back to old protocols too often) and the fact that clients
-      can't reliably detect the network changes that should invalidate a cached
-      alternative.
-    </p>
   </section>
 
   <!-- HOW / why RR is superior -->
@@ -180,9 +168,10 @@ sequenceDiagram
     <h3>5 · One authoritative source, sane caching</h3>
     <p>
       Reachability lives in the DNS with a normal TTL, instead of being smeared
-      across per-origin HTTP-header caches with the <code>max-age</code> dilemma
-      described above. The browser was going to do a DNS lookup anyway; this
-      just makes that lookup carry the answer.
+      across per-origin HTTP-header caches with their <code>max-age</code>
+      dilemma: too long and clients use stale alternatives, too short and they
+      fall back to older protocols more often than they should. The browser was
+      going to do a DNS lookup anyway; this just makes that lookup carry the answer.
     </p>
 
     <table class="cmp">
