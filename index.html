@@ -20,8 +20,8 @@
     <span class="brand">savearoundtrip<span class="blink">_</span></span>
     <nav>
       <a href="#check">check a domain</a>
-      <a href="#why">why</a>
-      <a href="#how">how</a>
+      <a href="#why">the problem</a>
+      <a href="#how">why HTTPS</a>
       <a href="#data">data</a>
       <a href="#publish">publish</a>
       <a href="#faq">faq</a>
@@ -31,16 +31,10 @@
   <div class="hero">
     <h1>You serve your site via <span class="hl">HTTP/3</span>.<br>Let clients use it on the <span class="hl">first connection</span> and save a round trip.</h1>
     <p class="lede">
-      If your site serves HTTP/3, there are two ways a browser can find that
-      out: the <code>Alt-Svc</code> HTTP header, which it can only read
-      <span class="dim">after</span> it has already connected over HTTP/2, or an
-      <b>HTTPS DNS record</b>, which it reads <span class="dim">before</span>
-      connecting. Advertise only via the header and clients reach HTTP/3 only on
-      their <b>second</b> connection. Publish an HTTPS record and they connect
-      over HTTP/3 <b>right away</b>, on the first one. And HTTP/3 connects a
-      round trip faster anyway: it runs over QUIC, which folds the transport and
-      TLS handshakes into a single exchange, one round trip where TCP plus TLS
-      needs two. Publish an HTTPS DNS record and <span class="hl">save a round trip</span>.
+      Browsers discover your HTTP/3 from an <code>Alt-Svc</code> header only
+      <span class="dim">after</span> they have already connected. Put it in an
+      <b>HTTPS DNS record</b> instead, and the very first connection is
+      <span class="hl">HTTP/3</span>.
     </p>
   </div>
 
@@ -236,9 +230,8 @@ sequenceDiagram
     <h2>from a real browser</h2>
     <p>
       <span class="badge">Firefox Nightly</span>
-      Not a model and not a scan of ours: this is Firefox itself reporting, via
-      Mozilla's public <a href="https://glam.telemetry.mozilla.org/">GLAM</a>
-      telemetry, how it discovers HTTP/3. These numbers are from Firefox Nightly.
+      Measured by Firefox itself, via Mozilla's public
+      <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry.
     </p>
     <p>
       A browser can learn that a server speaks HTTP/3 in <b>two</b> ways: from
@@ -253,7 +246,7 @@ sequenceDiagram
       <li><b>Both</b>: advertised in DNS and the header.</li>
     </ul>
 
-    <h3>How Firefox discovers HTTP/3 today</h3>
+    <h3>HTTP/3 discovery, by the numbers</h3>
     <div class="statgrid" id="stats-h3"></div>
     <div id="chart-h3" class="bars"></div>
     <p class="chart-cap">
@@ -275,16 +268,25 @@ sequenceDiagram
 
   <!-- PUBLISH -->
   <section id="publish">
-    <h2>publish one (it's two lines)</h2>
+    <h2>publish one (it's one line)</h2>
     <p>A ServiceMode HTTPS record advertising h3, with address hints:</p>
     <pre><code><span class="tok-com">; zone file (BIND-style)</span>
 example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
-    <ul class="tick">
-      <li>Priority <code>1</code> = ServiceMode (carries params). <code>0</code> = AliasMode.</li>
-      <li><code>.</code> as the target means "same name as the owner".</li>
-      <li>Most managed DNS providers (Cloudflare, Route&nbsp;53, etc.) expose an HTTPS/SVCB record type directly.</li>
-      <li>Verify it: paste your domain into the <a href="#check">checker above</a>.</li>
+    <p>Reading it left to right:</p>
+    <ul class="fields">
+      <li><code>example.com.</code> the name you publish it under; the trailing dot makes it fully qualified.</li>
+      <li><code>3600</code> the TTL: how many seconds a resolver may cache the record.</li>
+      <li><code>IN</code> the DNS class (Internet), as on every web record.</li>
+      <li><code>HTTPS</code> the record type (RFC 9460).</li>
+      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode (this record carries the parameters); <code>0</code> is AliasMode, which just points at another target.</li>
+      <li><code>.</code> the target host. <code>.</code> means the owner name itself, here <code>example.com</code>.</li>
+      <li><code>alpn="h3,h2"</code> the protocols the server speaks, best first: <code>h3</code> is HTTP/3, <code>h2</code> is HTTP/2.</li>
+      <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the client can start connecting to right away, alongside its A/AAAA lookups.</li>
     </ul>
+    <p class="dim">
+      Most managed DNS providers (Cloudflare, Route&nbsp;53, and others) expose an
+      HTTPS record type directly. Verify yours with the <a href="#check">checker</a>.
+    </p>
   </section>
 
   <!-- RECORDS (what records carry in the wild) -->
@@ -319,25 +321,20 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       if you still send it). Publishing one is strictly additive.
     </p>
 
-    <h3>Apex or <code>www</code>?</h3>
-    <p>
-      Publish it on the name people actually connect to. If that's the apex
-      (<code>example.com</code>), an HTTPS record works there directly. No CNAME
-      tricks needed.
-    </p>
-
     <h3>What about repeat visits?</h3>
     <p>
       Even better: once a client has spoken HTTP/3 with you, a return visit can
       resume the QUIC connection in <b>0-RTT</b>, putting the first request on
-      the wire with no handshake round trip at all.
+      the wire with no handshake round trip at all. And the HTTPS record itself
+      is cached for its TTL like any DNS answer, so repeat visits usually skip
+      the lookup too.
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
-      Not yet. Keep sending it as a fallback for clients that didn't get the
-      HTTPS record. The record just means the common case stops paying a round
-      trip to discover what DNS could have told it up front.
+      Not yet. Keep sending it as a fallback for clients that did not get the
+      HTTPS record. With the record in place, most clients learn about HTTP/3
+      from DNS instead, and no longer spend a round trip discovering it.
     </p>
   </section>
 

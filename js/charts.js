@@ -62,13 +62,18 @@ function renderTrend(el, series) {
     return;
   }
 
-  const W = 720, H = 200, padL = 6, padR = 6, padT = 8, padB = 22;
+  const W = 720, H = 214, padL = 8, padR = 8, padT = 8, padB = 40;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = pts.length;
   const slot = plotW / n;
-  const barW = Math.min(30, slot * 0.68);
+  const barW = Math.min(26, slot * 0.6);
   const yTop = (cum) => padT + ((100 - cum) / 100) * plotH;
   const bandClass = { none: "band-none", altsvc_only: "band-altsvc", both: "band-both", https_rr_only: "band-https" };
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const shortDate = (d) => {
+    const [, m, day] = (d || "").split("-");
+    return m ? `${MON[+m - 1]} ${+day}` : d;
+  };
 
   // one slim stacked column per build
   let rects = "";
@@ -82,20 +87,31 @@ function renderTrend(el, series) {
       cum += v;
     }
   });
+  // tilted date label under the first bar of each day, thinned to ~14 max
+  const isDayStart = pts.map((p, i) => i === 0 || pts[i - 1].date !== p.date);
+  const dayTotal = isDayStart.filter(Boolean).length;
+  const step = Math.ceil(dayTotal / 14);
+  let ticks = "", dayIdx = -1;
+  pts.forEach((p, i) => {
+    if (!isDayStart[i]) return;
+    dayIdx += 1;
+    if (dayIdx % step !== 0) return;
+    const cx = padL + slot * (i + 0.5);
+    const ty = H - padB + 15;
+    ticks += `<text class="ax" transform="rotate(-40 ${cx.toFixed(1)} ${ty})" x="${cx.toFixed(1)}" y="${ty}" text-anchor="end">${shortDate(p.date)}</text>`;
+  });
   // one transparent hover target per build, spanning the whole column slot
   let hits = "";
   pts.forEach((_, i) => {
     hits += `<rect class="hit" data-i="${i}" x="${(padL + slot * i).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${plotH}"></rect>`;
   });
 
-  const first = pts[0].date, last = pts[n - 1].date;
   const svg =
     `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" ` +
     `aria-label="Share of the four HTTP/3 discovery groups per recent Firefox Nightly build, stacked to 100%">` +
     rects +
     hits +
-    `<text class="ax" x="${padL}" y="${H - 6}">${first}</text>` +
-    `<text class="ax" x="${W - padR}" y="${H - 6}" text-anchor="end">${last}</text>` +
+    ticks +
     `</svg>`;
 
   const wrap = elem("div", "trend");
