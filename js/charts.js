@@ -62,34 +62,34 @@ function renderTrend(el, series) {
     return;
   }
 
-  const W = 720, H = 220, padL = 6, padR = 6, padT = 8, padB = 24;
+  const W = 720, H = 200, padL = 6, padR = 6, padT = 8, padB = 22;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = pts.length;
-  const x = (i) => padL + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
-  const y = (cum) => padT + ((100 - cum) / 100) * plotH;
-
-  // cumulative tops per point
-  const cum = pts.map((p) => {
-    const c = [0];
-    for (const k of STACK) c.push(c[c.length - 1] + (p[k] || 0));
-    return c;
-  });
-
-  let paths = "";
+  const slot = plotW / n;
+  const barW = Math.min(30, slot * 0.68);
+  const yTop = (cum) => padT + ((100 - cum) / 100) * plotH;
   const bandClass = { none: "band-none", altsvc_only: "band-altsvc", both: "band-both", https_rr_only: "band-https" };
-  STACK.forEach((k, b) => {
-    const top = pts.map((_, i) => `${x(i).toFixed(1)},${y(cum[i][b + 1]).toFixed(1)}`);
-    const bot = pts.map((_, i) => `${x(i).toFixed(1)},${y(cum[i][b]).toFixed(1)}`).reverse();
-    paths += `<path class="${bandClass[k]}" d="M${top.join(" L")} L${bot.join(" L")} Z"></path>`;
+
+  // one slim stacked column per build
+  let rects = "";
+  pts.forEach((p, i) => {
+    const x = padL + slot * (i + 0.5) - barW / 2;
+    let cum = 0;
+    for (const k of STACK) {
+      const v = p[k] || 0;
+      const y0 = yTop(cum + v), h = Math.max(0, yTop(cum) - y0);
+      rects += `<rect class="${bandClass[k]}" x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="1"><title>${p.date} ${BUCKETS[k][0]}: ${v}%</title></rect>`;
+      cum += v;
+    }
   });
 
   const first = pts[0].date, last = pts[n - 1].date;
   const svg =
-    `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" ` +
-    `aria-label="Stacked share of the four HTTP/3 discovery groups over recent Firefox Nightly builds">` +
-    paths +
-    `<text class="ax" x="${padL}" y="${H - 8}">${first}</text>` +
-    `<text class="ax" x="${W - padR}" y="${H - 8}" text-anchor="end">${last}</text>` +
+    `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" ` +
+    `aria-label="Share of the four HTTP/3 discovery groups per recent Firefox Nightly build, stacked to 100%">` +
+    rects +
+    `<text class="ax" x="${padL}" y="${H - 6}">${first}</text>` +
+    `<text class="ax" x="${W - padR}" y="${H - 6}" text-anchor="end">${last}</text>` +
     `</svg>`;
 
   const legend = elem("div", "legend");

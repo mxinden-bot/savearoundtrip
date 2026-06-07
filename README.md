@@ -113,6 +113,6 @@ Prior art (one-off scans, no live tracker exists):
 - RFC 9460: Service Binding and Parameter Specification via the DNS (SVCB / HTTPS RRs)
 - RFC 7838: HTTP Alternative Services (`Alt-Svc`)
 - RFC 9114: HTTP/3
-- RFC 8305: Happy Eyeballs v2
+- draft-ietf-happy-happyeyeballs-v3: Happy Eyeballs v3
 - draft-ietf-tls-esni: TLS Encrypted Client Hello (ECH)
 - draft-thomson-httpbis-alt-svcb-00: "HTTP Alternative Services, Plan B"

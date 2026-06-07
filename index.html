@@ -19,10 +19,10 @@
   <header class="bar">
     <span class="brand">savearoundtrip<span class="blink">_</span></span>
     <nav>
+      <a href="#check">check a domain</a>
       <a href="#why">why</a>
       <a href="#how">how</a>
       <a href="#data">data</a>
-      <a href="#check">check a domain</a>
       <a href="#publish">publish</a>
       <a href="#faq">faq</a>
     </nav>
@@ -55,197 +55,6 @@
     </div>
     <div class="src" id="metric-src">loading from GLAM...</div>
   </div>
-
-  <!-- WHY -->
-  <section id="why">
-    <h2>the wasted round trip</h2>
-    <p>
-      <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
-      is an HTTP response header. To read it, the client must finish a request, which
-      means it has <i>already</i> opened a TCP connection, done a TLS handshake,
-      and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
-      speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
-    </p>
-    <p>
-      An <b>HTTPS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
-      carries the same "I speak HTTP/3" signal, but in the DNS. The client reads
-      it during the name resolution it was going to do anyway, <i>before</i> it
-      opens any connection. So it can make its very first connection over
-      QUIC/HTTP/3, with no HTTP/2 round trip spent just to find out.
-    </p>
-
-    <div class="seq">
-      <div class="seqcol bad">
-        <h4>HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up A / AAAA
-    D-->>C: IP address
-    C->>S: TCP + TLS handshake
-    S-->>C: connected (HTTP/2)
-    C->>S: HTTP/2 request
-    S-->>C: response + Alt-Svc: h3
-    Note over C,S: only now does the client learn you speak HTTP/3
-    Note over C,S: Second connection
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-        </pre>
-        <div class="verdict">HTTP/3 only on the second connection.</div>
-      </div>
-      <div class="seqcol good">
-        <h4>HTTP/3 advertised in an HTTPS DNS record</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up HTTPS record
-    D-->>C: alpn=h3 + IP hints (+ ECH)
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-    C->>S: HTTP/3 request
-    S-->>C: response
-        </pre>
-        <div class="verdict">HTTP/3 right away, on the first connection.</div>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- HOW / why RR is superior -->
-  <section id="how">
-    <h2>why the HTTPS record is strictly better</h2>
-    <p>
-      The HTTPS resource record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>,
-      Nov 2023, same wire format as SVCB) folds everything a client needs to
-      open the optimal connection into the DNS answer it was already fetching.
-      Concretely:
-    </p>
-
-    <h3>1 · HTTP/3 discovery before the first byte</h3>
-    <p>
-      The <code>alpn</code> SvcParam lists the
-      <a href="https://www.rfc-editor.org/rfc/rfc7301">ALPN</a> protocol IDs the
-      endpoint speaks, e.g. <code>h3</code> (<a
-      href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
-      <code>h2</code>. Because it arrives during name resolution, the client
-      can pick QUIC for its <i>very first</i> connection instead of discovering
-      h3 only after an HTTP/2 round trip. An HTTPS RR can carry <b>multiple</b>
-      ALPNs; an <code>Alt-Svc</code> field value carries one protocol each.
-    </p>
-
-    <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
-    <p>
-      The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
-      public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
-      ECH encrypts the TLS ClientHello, including the SNI server name, so a
-      network observer can't see which site you're visiting. This is a
-      <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
-      key <i>before</i> you send the first ClientHello, which is exactly when no
-      connection exists yet. Only an out-of-band channel, the DNS (the
-      HTTPS record), can bootstrap ECH. No HTTPS RR, no ECH.
-    </p>
-
-    <h3>3 · IP hints: connect without a second lookup race</h3>
-    <p>
-      <code>ipv4hint</code> and <code>ipv6hint</code> ship candidate addresses
-      inside the HTTPS answer. The client can start connecting immediately and
-      run <a href="https://www.rfc-editor.org/rfc/rfc8305">Happy Eyeballs v2</a>
-      (RFC 8305) over them, rather than serializing an extra A/AAAA resolution
-      step. They're especially valuable at the zone apex and for steering to the
-      right CDN edge. <code>Alt-Svc</code> has no equivalent.
-    </p>
-
-    <h3>4 · Aliasing at the zone apex, no CNAME hacks</h3>
-    <p>
-      In <i>AliasMode</i> (priority&nbsp;0) an HTTPS record redirects the apex of
-      a zone, <code>example.com</code> itself, to another target, something a
-      <code>CNAME</code> can't legally do at the apex. <i>ServiceMode</i>
-      (priority&nbsp;&ge;&nbsp;1) carries the connection parameters above. One
-      record type does load-distribution, failover, and parameter delivery.
-    </p>
-
-    <h3>5 · One authoritative source, sane caching</h3>
-    <p>
-      Reachability lives in the DNS with a normal TTL, instead of being smeared
-      across per-origin HTTP-header caches with their <code>max-age</code>
-      dilemma: too long and clients use stale alternatives, too short and they
-      fall back to older protocols more often than they should. The browser was
-      going to do a DNS lookup anyway; this just makes that lookup carry the answer.
-    </p>
-
-    <table class="cmp">
-      <thead>
-        <tr><th>capability</th><th>Alt-Svc HTTP header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
-        <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
-        <tr><td>multiple ALPNs</td><td class="no">one per value</td><td class="yes">yes</td></tr>
-        <tr><td>IP hints</td><td class="no">n/a</td><td class="yes">ipv4hint / ipv6hint</td></tr>
-        <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
-        <tr><td>apex redirection</td><td class="no">n/a</td><td class="yes">AliasMode</td></tr>
-        <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <!-- DATA (real-browser numbers from GLAM) -->
-  <section id="data">
-    <h2>from real browsers</h2>
-    <p>
-      <span class="badge">Firefox Nightly</span>
-      Not a model and not a scan of ours: this is Firefox itself reporting, via
-      Mozilla's public <a href="https://glam.telemetry.mozilla.org/">GLAM</a>
-      telemetry, how it discovered HTTP/3. <b>These numbers are Firefox Nightly
-      only</b>, the only channel carrying these measurements today.
-    </p>
-    <p>
-      A browser can learn that a server speaks HTTP/3 in <b>two</b> ways: from
-      the <code>Alt-Svc</code> HTTP response header (seen only after it has
-      already connected), or from an <b>HTTPS DNS record</b> (seen before
-      connecting). So every connection falls into one of four groups:
-    </p>
-    <ul class="tick">
-      <li><b>Neither</b>: HTTP/3 was not advertised at all.</li>
-      <li><b>Alt-Svc only</b>: advertised, but only in the header, so the first connection could not use it.</li>
-      <li><b>HTTPS record only</b>: advertised in DNS, so the first connection could go straight to HTTP/3.</li>
-      <li><b>Both</b>: advertised in DNS and the header.</li>
-    </ul>
-
-    <h3>How Firefox discovers HTTP/3 today</h3>
-    <div class="statgrid" id="stats-h3"></div>
-    <div id="chart-h3" class="bars"></div>
-    <p class="chart-cap">
-      Share of measured connections, Firefox Nightly. The two right-hand groups
-      had a usable HTTPS record; <b>Alt-Svc only</b> is the gap a record would close.
-      <span id="h3-n"></span>
-    </p>
-
-    <h3>How it is developing over time</h3>
-    <div id="chart-trend"></div>
-    <p class="chart-cap">
-      Each band is one of the four groups, stacked to 100%, per Nightly build.
-      Firefox Nightly only.
-    </p>
-
-    <h3>What the HTTPS records carried</h3>
-    <div id="chart-feat" class="bars"></div>
-    <p class="chart-cap">
-      Of connections that saw an HTTPS record, the share whose record carried
-      each feature. ECH and the IP hints can only be delivered ahead of the
-      first connection through DNS. <span id="feat-n"></span>
-    </p>
-
-    <p class="chart-cap" id="data-src"></p>
-  </section>
 
   <!-- CHECK -->
   <section id="check">
@@ -283,9 +92,184 @@ sequenceDiagram
     <p class="dim" style="font-size:12.5px;margin-top:14px">
       Can't I just check <code>Alt-Svc</code> too? Not from a web page. CORS
       forbids reading another origin's response headers in the browser. Spotting
-      "<code>Alt-Svc</code> but no HTTPS&nbsp;RR" needs an offline scan; that's
-      what the headline number is for.
+      the <code>Alt-Svc</code>-but-no-record case across the web has to happen
+      off the browser; that is where the <a href="#data">real-browser data</a>
+      below comes from.
     </p>
+  </section>
+
+  <!-- WHY -->
+  <section id="why">
+    <h2>the wasted round trip</h2>
+    <p>
+      <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
+      is an HTTP response header. To read it, the client must finish a request, which
+      means it has <i>already</i> opened a TCP connection, done a TLS handshake,
+      and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
+      speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
+    </p>
+
+    <div class="seq">
+      <div class="seqcol bad">
+        <h4>HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
+        <pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant D as DNS
+    participant S as Your server
+    Note over C,S: First connection
+    C->>D: look up A / AAAA
+    D-->>C: IP address
+    C->>S: TCP + TLS handshake
+    S-->>C: connected (HTTP/2)
+    C->>S: HTTP/2 request
+    S-->>C: response + Alt-Svc: h3
+    Note over C,S: only now does the client learn you speak HTTP/3
+    Note over C,S: Second connection
+    C->>S: QUIC + HTTP/3 handshake
+    S-->>C: connected (HTTP/3)
+        </pre>
+        <div class="verdict">HTTP/3 only on the second connection.</div>
+      </div>
+      <p>
+        An <b>HTTPS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
+        carries the same "I speak HTTP/3" signal, but in the DNS. The client
+        reads it during the name resolution it was going to do anyway,
+        <i>before</i> it opens any connection. So it can make its very first
+        connection over QUIC/HTTP/3, with no earlier HTTP/1 or HTTP/2 connection
+        spent just to find out.
+      </p>
+      <div class="seqcol good">
+        <h4>HTTP/3 advertised in an HTTPS DNS record</h4>
+        <pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant D as DNS
+    participant S as Your server
+    Note over C,S: First connection
+    C->>D: look up HTTPS record
+    D-->>C: alpn=h3 + IP hints (+ ECH)
+    C->>S: QUIC + HTTP/3 handshake
+    S-->>C: connected (HTTP/3)
+    C->>S: HTTP/3 request
+    S-->>C: response
+        </pre>
+        <div class="verdict">HTTP/3 right away, on the first connection.</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- HOW / why RR is superior -->
+  <section id="how">
+    <h2>why the HTTPS record is strictly better</h2>
+    <p>
+      The HTTPS resource record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>,
+      Nov 2023) folds everything a client needs to
+      open the optimal connection into the DNS answer it was already fetching.
+      Concretely:
+    </p>
+
+    <h3>1 · HTTP/3 discovery before the first byte</h3>
+    <p>
+      The <code>alpn</code> SvcParam lists the
+      <a href="https://www.rfc-editor.org/rfc/rfc7301">ALPN</a> protocol IDs the
+      endpoint speaks, e.g. <code>h3</code> (<a
+      href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
+      <code>h2</code>. Because it arrives during name resolution, the client
+      can pick QUIC for its <i>very first</i> connection instead of discovering
+      h3 only after a previous HTTP/1 or HTTP/2 connection. An HTTPS RR can carry <b>multiple</b>
+      ALPNs; an <code>Alt-Svc</code> field value carries one protocol each.
+    </p>
+
+    <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
+    <p>
+      The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
+      public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
+      ECH encrypts the TLS ClientHello, including the SNI server name, so a
+      network observer can't see which site you're visiting. This is a
+      <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
+      key <i>before</i> you send the first ClientHello, which is exactly when no
+      connection exists yet. Only an out-of-band channel, the DNS (the
+      HTTPS record), can bootstrap ECH. No HTTPS RR, no ECH.
+    </p>
+
+    <h3>3 · IP hints: start connecting sooner</h3>
+    <p>
+      <code>ipv4hint</code> and <code>ipv6hint</code> ship candidate addresses
+      inside the HTTPS answer, so the client can begin connecting and running
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy
+      Eyeballs v3</a> right away, using them as provisional answers while the A
+      and AAAA lookups run in parallel. The client still issues those queries,
+      and the real records supersede the hints once they arrive; the hints just
+      save it from waiting on them to make the first attempt.
+      <code>Alt-Svc</code> has no equivalent.
+    </p>
+
+    <h3>4 · One authoritative source, sane caching</h3>
+    <p>
+      Reachability lives in the DNS with a normal TTL, instead of being smeared
+      across per-origin HTTP-header caches with their <code>max-age</code>
+      dilemma: too long and clients use stale alternatives, too short and they
+      fall back to older protocols more often than they should. The browser was
+      going to do a DNS lookup anyway; this just makes that lookup carry the answer.
+    </p>
+
+    <table class="cmp">
+      <thead>
+        <tr><th>capability</th><th>Alt-Svc HTTP header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
+        <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
+        <tr><td>multiple ALPNs</td><td class="no">one per value</td><td class="yes">yes</td></tr>
+        <tr><td>IP hints</td><td class="no">n/a</td><td class="yes">ipv4hint / ipv6hint</td></tr>
+        <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
+        <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- DATA (real-browser numbers from GLAM) -->
+  <section id="data">
+    <h2>from a real browser</h2>
+    <p>
+      <span class="badge">Firefox Nightly</span>
+      Not a model and not a scan of ours: this is Firefox itself reporting, via
+      Mozilla's public <a href="https://glam.telemetry.mozilla.org/">GLAM</a>
+      telemetry, how it discovers HTTP/3. These numbers are from Firefox Nightly.
+    </p>
+    <p>
+      A browser can learn that a server speaks HTTP/3 in <b>two</b> ways: from
+      the <code>Alt-Svc</code> HTTP response header (seen only after it has
+      already connected), or from an <b>HTTPS DNS record</b> (seen before
+      connecting). So every connection falls into one of four groups:
+    </p>
+    <ul class="tick">
+      <li><b>Neither</b>: HTTP/3 was not advertised at all.</li>
+      <li><b>Alt-Svc only</b>: advertised, but only in the header, so the first connection could not use it.</li>
+      <li><b>HTTPS record only</b>: advertised in DNS, so the first connection could go straight to HTTP/3.</li>
+      <li><b>Both</b>: advertised in DNS and the header.</li>
+    </ul>
+
+    <h3>How Firefox discovers HTTP/3 today</h3>
+    <div class="statgrid" id="stats-h3"></div>
+    <div id="chart-h3" class="bars"></div>
+    <p class="chart-cap">
+      Share of measured connections, Firefox Nightly. The four groups cover
+      every connection, so they add up to 100%. The two right-hand groups had a
+      usable HTTPS record; <b>Alt-Svc only</b> is the gap a record would close.
+      <span id="h3-n"></span>
+    </p>
+
+    <h3>How it is developing over time</h3>
+    <div id="chart-trend"></div>
+    <p class="chart-cap">
+      Each bar is one Nightly build, split into the four groups (100%).
+      Firefox Nightly only.
+    </p>
+
+    <p class="chart-cap" id="data-src"></p>
   </section>
 
   <!-- PUBLISH -->
@@ -303,6 +287,19 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <li>Most managed DNS providers (Cloudflare, Route&nbsp;53, etc.) expose an HTTPS/SVCB record type directly.</li>
       <li>Verify it: paste your domain into the <a href="#check">checker above</a>.</li>
     </ul>
+  </section>
+
+  <!-- RECORDS (what records carry in the wild) -->
+  <section id="records">
+    <h2>what HTTPS records carry in the wild</h2>
+    <p class="dim">
+      <span class="badge">Firefox Nightly</span>
+      Of the connections where Firefox saw an HTTPS record, the share whose
+      record carried each feature. ECH and the IP hints can only be delivered
+      ahead of the first connection through DNS.
+    </p>
+    <div id="chart-feat" class="bars"></div>
+    <p class="chart-cap"><span id="feat-n"></span></p>
   </section>
 
   <!-- FAQ -->
@@ -355,7 +352,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838 Alt-Svc</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 HTTP/3</a> ·
-      <a href="https://www.rfc-editor.org/rfc/rfc8305">RFC 8305 Happy Eyeballs v2</a> ·
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a> ·
       <a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni ECH</a> ·
       <a href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
     </div>
