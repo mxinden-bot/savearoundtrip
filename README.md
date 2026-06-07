@@ -79,6 +79,10 @@ shares, and commits `data/glam.json`. GitHub Pages then serves that as a plain,
 same-origin file the page reads with a normal `fetch`. So the site stays fully
 static at visit time; the only thing that ever touches GLAM is CI.
 
+Run it on demand instead of waiting for the daily cron: the workflow has a
+`workflow_dispatch` trigger, so you can start it from the repo's **Actions** tab
+("refresh GLAM data" -> "Run workflow"), or with `gh workflow run glam.yml`.
+
 The headline is **`altsvc_only / (altsvc_only + both + https_rr_only)`**: of the
 connections where the origin supports h3, the share that learned it only from an
 `Alt-Svc` header (no usable HTTPS record), and so reached HTTP/3 only on a later
