@@ -34,8 +34,8 @@
     <p class="lede">
       A browser can discover a site's HTTP/3 support two ways: either by first connecting
       over HTTP/1 or HTTP/2 and reading its <code>Alt-Svc</code> header, or right
-      away from an <b>HTTPS DNS record</b> lookup. Only the second reaches HTTP/3
-      on the first connection, saving a round trip.
+      away from an <b>HTTPS DNS record</b> lookup. Only with the HTTPS DNS record
+      can the browser use HTTP/3 on the first connection, saving a round trip with QUIC.
     </p>
   </div>
 
