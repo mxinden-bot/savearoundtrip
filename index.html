@@ -29,11 +29,13 @@
   </header>
 
   <div class="hero">
-    <h1>HTTP/3 on the <span class="hl">first connection</span>.<br>Save a round trip.</h1>
+    <h1>Advertise HTTP/3 support in an HTTPS DNS record, not just an Alt-Svc
+      header, and browsers use HTTP/3 on the <span class="hl">first connection</span>.</h1>
     <p class="lede">
-      Advertise HTTP/3 support in an <b>HTTPS DNS record</b>, not just an
-      <code>Alt-Svc</code> header, and browsers use it on the
-      <span class="hl">first connection</span>.
+      A browser can discover a site's HTTP/3 two ways: from an <code>Alt-Svc</code>
+      response header, seen only after it has already connected, or from an
+      <b>HTTPS DNS record</b>, seen during the DNS lookup, before connecting. The
+      record gets it onto HTTP/3 a round trip sooner.
     </p>
   </div>
 
