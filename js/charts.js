@@ -32,20 +32,23 @@ function renderStats(el, share) {
   }
 }
 
-function barRow(label, pct, cls) {
+const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+
+function barRow(label, pct, cls, count) {
   const w = Math.max(0, Math.min(100, pct));
+  const title = count != null ? ` title="${fmt(count)} samples"` : "";
   return elem(
     "div",
     "bar-row",
     `<span class="bar-label">${label}</span>` +
-      `<span class="bar-track"><span class="bar-fill ${cls}" style="width:${w}%"></span></span>` +
+      `<span class="bar-track"${title}><span class="bar-fill ${cls}" style="width:${w}%"></span></span>` +
       `<span class="bar-val">${pct}%</span>`
   );
 }
 
 function renderBars(el, rows) {
   el.innerHTML = "";
-  for (const [label, pct, cls] of rows) el.append(barRow(label, pct, cls));
+  for (const [label, pct, cls, count] of rows) el.append(barRow(label, pct, cls, count));
 }
 
 // 100% stacked area of the four buckets over time.
@@ -132,32 +135,41 @@ async function loadGlam() {
   }
 
   const share = d.h3_discovery.share;
+  const hc = d.h3_discovery.counts || {};
   const stats = document.getElementById("stats-h3");
   if (stats) renderStats(stats, share);
 
   const chartH3 = document.getElementById("chart-h3");
   if (chartH3) {
     renderBars(chartH3, [
-      [BUCKETS.none[0], share.none, "c-none"],
-      [BUCKETS.altsvc_only[0], share.altsvc_only, "c-altsvc"],
-      [BUCKETS.https_rr_only[0], share.https_rr_only, "c-https"],
-      [BUCKETS.both[0], share.both, "c-both"],
+      [BUCKETS.none[0], share.none, "c-none", hc.none],
+      [BUCKETS.altsvc_only[0], share.altsvc_only, "c-altsvc", hc.altsvc_only],
+      [BUCKETS.https_rr_only[0], share.https_rr_only, "c-https", hc.https_rr_only],
+      [BUCKETS.both[0], share.both, "c-both", hc.both],
     ]);
+  }
+  const h3n = document.getElementById("h3-n");
+  if (h3n) {
+    const total = (hc.none || 0) + (hc.altsvc_only || 0) + (hc.https_rr_only || 0) + (hc.both || 0);
+    h3n.textContent = `Based on ${fmt(total)} samples.`;
   }
 
   const trend = document.getElementById("chart-trend");
   if (trend) renderTrend(trend, d.h3_discovery.series);
 
   const f = d.https_rr_features.share_of_records;
+  const fc = d.https_rr_features.counts || {};
   const chartFeat = document.getElementById("chart-feat");
   if (chartFeat) {
     renderBars(chartFeat, [
-      ["h3 in ALPN", f.h3_alpn, "c-https"],
-      ["IPv4 hint", f.ipv4hint, "c-both"],
-      ["IPv6 hint", f.ipv6hint, "c-both"],
-      ["ECH", f.ech, "c-both"],
+      ["h3 in ALPN", f.h3_alpn, "c-https", fc.h3_alpn],
+      ["IPv4 hint", f.ipv4hint, "c-both", fc.ipv4hint],
+      ["IPv6 hint", f.ipv6hint, "c-both", fc.ipv6hint],
+      ["ECH", f.ech, "c-both", fc.ech],
     ]);
   }
+  const featN = document.getElementById("feat-n");
+  if (featN) featN.textContent = `Based on ${fmt(fc.total)} connections that saw an HTTPS record.`;
 
   const src = document.getElementById("data-src");
   if (src) {
