@@ -48,10 +48,11 @@
   <div class="metric">
     <div class="big loading" id="metric-num">…</div>
     <div class="cap" id="metric-cap">
-      of HTTP/3-capable connections in Firefox reach HTTP/3 only on a
-      <b>later</b> connection: the server advertised h3 only in an
-      <code>Alt-Svc</code> HTTP header, not in DNS. A published HTTPS record
-      would have saved each one a round trip.
+      of connections in Firefox Nightly reach HTTP/3 only on a <b>later</b>
+      connection: the site advertised h3 only in an <code>Alt-Svc</code> HTTP
+      header, not in DNS, though it could have published both. A published
+      HTTPS record would have saved each one a round trip on the first
+      connection.
     </div>
     <div class="src" id="metric-src">loading from GLAM...</div>
   </div>

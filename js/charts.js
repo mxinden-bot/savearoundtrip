@@ -165,7 +165,7 @@ async function loadGlam() {
 
   // headline number
   if (metricNum) {
-    metricNum.textContent = d.h3_discovery.altsvc_only_of_h3_capable + "%";
+    metricNum.textContent = d.h3_discovery.share.altsvc_only + "%";
     metricNum.classList.remove("loading");
   }
   if (metricSrc) {
