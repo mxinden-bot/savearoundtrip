@@ -277,10 +277,7 @@ sequenceDiagram
     <h2>publish one (it's two lines)</h2>
     <p>A ServiceMode HTTPS record advertising h3, with address hints:</p>
     <pre><code><span class="tok-com">; zone file (BIND-style)</span>
-example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span>
-
-<span class="tok-com">; add ECH once you have an ECHConfigList:</span>
-<span class="tok-com">;   ... alpn="h3,h2" ech="AED+DQBA..." ipv4hint=...</span></code></pre>
+example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
     <ul class="tick">
       <li>Priority <code>1</code> = ServiceMode (carries params). <code>0</code> = AliasMode.</li>
       <li><code>.</code> as the target means "same name as the owner".</li>

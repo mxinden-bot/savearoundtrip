@@ -78,9 +78,14 @@ function renderTrend(el, series) {
     for (const k of STACK) {
       const v = p[k] || 0;
       const y0 = yTop(cum + v), h = Math.max(0, yTop(cum) - y0);
-      rects += `<rect class="${bandClass[k]}" x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="1"><title>${p.date} ${BUCKETS[k][0]}: ${v}%</title></rect>`;
+      rects += `<rect class="${bandClass[k]}" x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="1"></rect>`;
       cum += v;
     }
+  });
+  // one transparent hover target per build, spanning the whole column slot
+  let hits = "";
+  pts.forEach((_, i) => {
+    hits += `<rect class="hit" data-i="${i}" x="${(padL + slot * i).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${plotH}"></rect>`;
   });
 
   const first = pts[0].date, last = pts[n - 1].date;
@@ -88,9 +93,44 @@ function renderTrend(el, series) {
     `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" ` +
     `aria-label="Share of the four HTTP/3 discovery groups per recent Firefox Nightly build, stacked to 100%">` +
     rects +
+    hits +
     `<text class="ax" x="${padL}" y="${H - 6}">${first}</text>` +
     `<text class="ax" x="${W - padR}" y="${H - 6}" text-anchor="end">${last}</text>` +
     `</svg>`;
+
+  const wrap = elem("div", "trend");
+  wrap.innerHTML = svg;
+  const tip = elem("div", "trend-tip");
+  tip.hidden = true;
+  wrap.append(tip);
+
+  const order = ["none", "altsvc_only", "https_rr_only", "both"];
+  wrap.querySelectorAll("rect.hit").forEach((r) => {
+    const i = Number(r.getAttribute("data-i"));
+    const move = (e) => {
+      const p = pts[i];
+      tip.hidden = false;
+      tip.innerHTML =
+        `<div class="tip-date">${p.date}</div>` +
+        order
+          .map(
+            (k) =>
+              `<div class="tip-row"><span class="tip-dot ${BUCKETS[k][1]}"></span>` +
+              `${BUCKETS[k][0]}<span class="tip-v">${p[k] || 0}%</span></div>`
+          )
+          .join("");
+      const box = wrap.getBoundingClientRect();
+      let lx = e.clientX - box.left + 14;
+      if (lx + 170 > box.width) lx = e.clientX - box.left - 170;
+      tip.style.left = Math.max(4, lx) + "px";
+      tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+    };
+    r.addEventListener("mouseenter", move);
+    r.addEventListener("mousemove", move);
+    r.addEventListener("mouseleave", () => {
+      tip.hidden = true;
+    });
+  });
 
   const legend = elem("div", "legend");
   for (const k of STACK) {
@@ -98,7 +138,7 @@ function renderTrend(el, series) {
     legend.append(elem("span", "legend-item", `<span class="legend-dot ${c}"></span>${label}`));
   }
 
-  el.append(elem("div", "trend", svg));
+  el.append(wrap);
   el.append(legend);
 }
 
@@ -130,8 +170,7 @@ async function loadGlam() {
   }
   if (metricSrc) {
     metricSrc.innerHTML =
-      `Firefox Nightly v${d.h3_discovery.version}, via ` +
-      `<a href="${d.h3_discovery.explore_url}">GLAM</a>. updated ${when}.`;
+      `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>. updated ${when}.`;
   }
 
   const share = d.h3_discovery.share;
@@ -174,7 +213,7 @@ async function loadGlam() {
   const src = document.getElementById("data-src");
   if (src) {
     src.innerHTML =
-      `Source: Firefox Nightly v${d.h3_discovery.version}, via GLAM, updated ${when}. ` +
+      `Source: Firefox Nightly, via GLAM, updated ${when}. ` +
       `Explore: <a href="${d.h3_discovery.explore_url}">h3 discovery</a>, ` +
       `<a href="${d.https_rr_features.explore_url}">HTTPS record features</a>. ` +
       `Shares use GLAM's By Client ID normalization.`;
