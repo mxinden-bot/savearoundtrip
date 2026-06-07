@@ -229,9 +229,8 @@ async function loadGlam() {
   const src = document.getElementById("data-src");
   if (src) {
     src.innerHTML =
-      `Source: Firefox Nightly, via GLAM, updated ${when}. ` +
-      `Explore: <a href="${d.h3_discovery.explore_url}">h3 discovery</a>, ` +
-      `<a href="${d.https_rr_features.explore_url}">HTTPS record features</a>. ` +
+      `Source: Firefox Nightly, via ` +
+      `<a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
       `Shares use GLAM's By Client ID normalization.`;
   }
 }
