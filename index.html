@@ -179,7 +179,7 @@ sequenceDiagram
     <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
     <p>
       The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
-      public keys (<a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni</a>).
+      public keys (<a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849</a>).
       ECH encrypts the TLS ClientHello, including the SNI server name, so a
       network observer can't see which site you're visiting. This is a
       <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
@@ -353,7 +353,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 HTTP/3</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc9000">RFC 9000 QUIC</a> ·
       <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a> ·
-      <a href="https://datatracker.ietf.org/doc/draft-ietf-tls-esni/">draft-ietf-tls-esni ECH</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849 ECH</a> ·
       <a href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
     </div>
   </footer>
