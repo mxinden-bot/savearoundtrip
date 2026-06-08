@@ -18,6 +18,7 @@ index.html              the whole site (landing + explainer + live lookup tool)
 css/style.css           monospace / terminal aesthetic
 js/lookup.js            Cloudflare DoH (DNS-over-HTTPS) HTTPS-RR lookup + wire parser
 js/charts.js            renders the real-browser numbers from data/glam.json
+js/rtt.js               estimates the visitor's own round-trip time for the headline
 scripts/fetch-glam.mjs  CI script: pulls the Happy Eyeballs probes from GLAM
 .github/workflows/glam.yml  daily job that refreshes data/glam.json
 data/glam.json          headline numbers, measured in Firefox (committed by CI)

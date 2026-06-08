@@ -47,7 +47,7 @@
       connection: the site advertised HTTP/3 only in an <code>Alt-Svc</code> HTTP
       header, not in DNS, though it could have published both. A published
       HTTPS record would have saved each one a round trip on the first
-      connection.
+      connection.<span id="rtt-clause"></span>
     </div>
     <div class="src" id="metric-src">loading from GLAM...</div>
   </div>
@@ -152,6 +152,22 @@ sequenceDiagram
       </div>
     </div>
 
+    <h3>what a round trip costs</h3>
+    <p>
+      A round trip is the time for one message to reach the server and come
+      back, bounded by the speed of light: very roughly 5 to 20 ms within a
+      city, 40 to 80 ms across a country, and 150 ms or more across an ocean or
+      over a mobile network. Real latency depends on where you and the server
+      are; <a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a>
+      tracks it around the world.
+    </p>
+    <p>
+      And it is paid where people notice. Under about 100 ms an interaction
+      feels instant; past that it starts to feel like waiting
+      (<a href="https://www.nngroup.com/articles/response-times-3-important-limits/">Nielsen</a>,
+      <a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
+      first connection, a single round trip can eat that whole budget.
+    </p>
   </section>
 
   <!-- HOW / why RR is superior -->
@@ -361,6 +377,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 </div>
 
 <script src="js/charts.js"></script>
+<script src="js/rtt.js"></script>
 <script src="js/lookup.js"></script>
 <script type="module">
   // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
