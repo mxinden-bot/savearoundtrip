@@ -21,6 +21,7 @@
     <nav>
       <a href="#check">check a domain</a>
       <a href="#why">the problem</a>
+      <a href="#cost">the cost</a>
       <a href="#how">why HTTPS</a>
       <a href="#data">data</a>
       <a href="#publish">publish</a>
@@ -152,7 +153,11 @@ sequenceDiagram
       </div>
     </div>
 
-    <h3>what a round trip costs</h3>
+  </section>
+
+  <!-- COST -->
+  <section id="cost">
+    <h2>what a round trip costs</h2>
     <p>
       A round trip is the time for one message to reach the server and come
       back, bounded by the speed of light: very roughly 5 to 20 ms within a
@@ -164,8 +169,7 @@ sequenceDiagram
     <p>
       And it is paid where people notice. Under about 100 ms an interaction
       feels instant; past that it starts to feel like waiting
-      (<a href="https://www.nngroup.com/articles/response-times-3-important-limits/">Nielsen</a>,
-      <a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
+      (<a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
       first connection, a single round trip can eat that whole budget.
     </p>
     <div id="rtt-viz" class="rttbar" hidden></div>
