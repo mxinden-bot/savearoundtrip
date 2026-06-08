@@ -45,9 +45,10 @@ function renderRttViz(ms) {
     `<div class="rttbar-thresh" style="left:${threshPct.toFixed(1)}%"></div>` +
     `</div>` +
     `<div class="rttbar-key">` +
-    `<span><b>~${ms} ms</b> wasted on the first connection, one round trip from you</span>` +
-    `<span>dashed line: 100 ms, the "feels instant" threshold</span>` +
-    `</div>`;
+    `<span><span class="rttbar-swatch"></span><b>~${ms} ms</b>: one round trip from you, wasted on the first connection</span>` +
+    `<span>dashed line: 100 ms, where a delay stops feeling instant</span>` +
+    `</div>` +
+    `<p class="rttbar-how">Measured live in your browser: the fastest of several small requests to a nearby server, so an estimate, not a benchmark.</p>`;
   el.hidden = false;
 }
 
