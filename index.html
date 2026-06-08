@@ -18,7 +18,8 @@
 
   <header class="bar">
     <span class="brand">savearoundtrip</span>
-    <nav>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="nav">☰</button>
+    <nav id="nav">
       <a href="#check">check a domain</a>
       <a href="#cost">the cost</a>
       <a href="#why">the problem</a>
@@ -381,6 +382,24 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
 </div>
 
+<script>
+  // Mobile nav: toggle the hamburger menu, and collapse it after a link tap.
+  (function () {
+    var t = document.getElementById("nav-toggle");
+    var n = document.getElementById("nav");
+    if (!t || !n) return;
+    t.addEventListener("click", function () {
+      var open = n.classList.toggle("open");
+      t.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    n.addEventListener("click", function (e) {
+      if (e.target.tagName === "A") {
+        n.classList.remove("open");
+        t.setAttribute("aria-expanded", "false");
+      }
+    });
+  })();
+</script>
 <script src="js/charts.js"></script>
 <script src="js/rtt.js"></script>
 <script src="js/lookup.js"></script>
