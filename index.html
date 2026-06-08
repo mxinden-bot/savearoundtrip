@@ -112,6 +112,14 @@
       for more data.
     </p>
     <p>
+      You pay it once per origin, on the first connection only; later requests
+      reuse that connection. A page often pulls from several origins (a
+      subdomain, a CDN, some third parties), so it can be paid several times in
+      one load. Browsers do coalesce origins that resolve to the same server and
+      share a certificate onto a single connection, which avoids the extra cost;
+      origins that do not coalesce each pay their own.
+    </p>
+    <p>
       And it is paid where people notice. Under about 100 ms an interaction
       feels instant; past that it starts to feel like waiting
       (<a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
