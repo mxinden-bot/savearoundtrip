@@ -194,8 +194,7 @@ sequenceDiagram
       href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
       <code>h2</code>. Because it arrives during name resolution, the client
       can pick QUIC for its <i>very first</i> connection instead of discovering
-      h3 only after a previous HTTP/1 or HTTP/2 connection. An HTTPS RR can carry <b>multiple</b>
-      ALPNs; an <code>Alt-Svc</code> field value carries one protocol each.
+      h3 only after a previous HTTP/1 or HTTP/2 connection.
     </p>
 
     <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
@@ -238,7 +237,6 @@ sequenceDiagram
       <tbody>
         <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
         <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
-        <tr><td>multiple ALPNs</td><td class="no">one per value</td><td class="yes">yes</td></tr>
         <tr><td>IP hints</td><td class="no">n/a</td><td class="yes">ipv4hint / ipv6hint</td></tr>
         <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
         <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>

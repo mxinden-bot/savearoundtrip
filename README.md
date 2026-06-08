@@ -59,7 +59,6 @@ RFC 3597 generic `\# <len> <hex>` form) to show:
 | First-connection h3? | No, needs a prior connection | **Yes** |
 | Carries IP hints? | No | **Yes** (`ipv4hint`/`ipv6hint`) |
 | Carries ECH keys? | No | **Yes** (`ech`) |
-| Multiple ALPNs? | One value | **Yes** |
 | Works at the zone apex? | n/a | **Yes** (AliasMode, no CNAME) |
 | Source of truth | Header + fragile cache | The DNS, authoritatively |
 
