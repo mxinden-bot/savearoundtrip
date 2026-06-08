@@ -20,8 +20,8 @@
     <span class="brand">savearoundtrip</span>
     <nav>
       <a href="#check">check a domain</a>
-      <a href="#why">the problem</a>
       <a href="#cost">the cost</a>
+      <a href="#why">the problem</a>
       <a href="#how">why HTTPS</a>
       <a href="#data">data</a>
       <a href="#publish">publish</a>
@@ -93,6 +93,26 @@
     </p>
   </section>
 
+  <!-- COST -->
+  <section id="cost">
+    <h2>what a round trip costs</h2>
+    <p>
+      A round trip is the time for one message to reach the server and come
+      back, bounded by the speed of light: very roughly 5 to 20 ms within a
+      city, 40 to 80 ms across a country, and 150 ms or more across an ocean or
+      over a mobile network. Real latency depends on where you and the server
+      are; see <a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a>
+      for more data.
+    </p>
+    <p>
+      And it is paid where people notice. Under about 100 ms an interaction
+      feels instant; past that it starts to feel like waiting
+      (<a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
+      first connection, a single round trip can eat that whole budget.
+    </p>
+    <div id="rtt-viz" class="rttbar" hidden></div>
+  </section>
+
   <!-- WHY -->
   <section id="why">
     <h2>the wasted round trip</h2>
@@ -153,26 +173,6 @@ sequenceDiagram
       </div>
     </div>
 
-  </section>
-
-  <!-- COST -->
-  <section id="cost">
-    <h2>what a round trip costs</h2>
-    <p>
-      A round trip is the time for one message to reach the server and come
-      back, bounded by the speed of light: very roughly 5 to 20 ms within a
-      city, 40 to 80 ms across a country, and 150 ms or more across an ocean or
-      over a mobile network. Real latency depends on where you and the server
-      are; see <a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a>
-      for more data.
-    </p>
-    <p>
-      And it is paid where people notice. Under about 100 ms an interaction
-      feels instant; past that it starts to feel like waiting
-      (<a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
-      first connection, a single round trip can eat that whole budget.
-    </p>
-    <div id="rtt-viz" class="rttbar" hidden></div>
   </section>
 
   <!-- HOW / why RR is superior -->
