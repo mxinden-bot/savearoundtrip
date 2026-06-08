@@ -26,10 +26,29 @@ async function measureRtt() {
 
 async function initRtt() {
   const slot = document.getElementById("rtt-clause");
-  if (!slot) return;
   const ms = await measureRtt();
   if (ms == null) return; // leave empty; the distance ranges below still apply
-  slot.innerHTML = ` For you right now, one round trip is about <b>~${ms} ms</b>.`;
+  if (slot) slot.innerHTML = ` For you right now, one round trip is about <b>~${ms} ms</b>.`;
+  renderRttViz(ms);
+}
+
+// A tiny bar: the measured round trip against the ~100 ms "feels instant" line.
+function renderRttViz(ms) {
+  const el = document.getElementById("rtt-viz");
+  if (!el) return;
+  const scaleMax = Math.max(120, Math.ceil((ms * 1.25) / 10) * 10);
+  const fillPct = Math.min(100, (ms / scaleMax) * 100);
+  const threshPct = (100 / scaleMax) * 100;
+  el.innerHTML =
+    `<div class="rttbar-track">` +
+    `<div class="rttbar-fill" style="width:${fillPct.toFixed(1)}%"></div>` +
+    `<div class="rttbar-thresh" style="left:${threshPct.toFixed(1)}%"></div>` +
+    `</div>` +
+    `<div class="rttbar-key">` +
+    `<span><b>~${ms} ms</b> wasted on the first connection, one round trip from you</span>` +
+    `<span>dashed line: 100 ms, the "feels instant" threshold</span>` +
+    `</div>`;
+  el.hidden = false;
 }
 
 document.addEventListener("DOMContentLoaded", initRtt);
