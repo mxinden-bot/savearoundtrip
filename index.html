@@ -35,7 +35,7 @@
       header, and browsers use HTTP/3 (QUIC) on the <span class="hl">first connection</span>.</h1>
     <p class="lede">
       A browser can discover a site's HTTP/3 support two ways: either by first connecting
-      over HTTP/1 or HTTP/2 and reading its <code>Alt-Svc</code> header, or right
+      over HTTP/1 or HTTP/2 and reading its <code>Alt-Svc</code> HTTP header, or right
       away from an <b>HTTPS DNS record</b> lookup. Only with the HTTPS DNS record
       can the browser use HTTP/3 on the first connection, saving a round trip using QUIC.
     </p>
@@ -68,6 +68,7 @@
       </form>
       <div class="examples">
         try:
+        <a href="#" data-example="savearoundtrip.com">savearoundtrip.com</a>
         <a href="#" data-example="cloudflare.com">cloudflare.com</a>
         <a href="#" data-example="blog.mozilla.org">blog.mozilla.org</a>
         <a href="#" data-example="github.com">github.com</a>
@@ -80,6 +81,11 @@
           <code>kdig</code> / <code>dog</code>).</div>
       </noscript>
     </div>
+    <p class="dim" style="font-size:12.5px;margin-top:14px">
+      This site eats its own dog food:
+      <a href="#check" data-example="savearoundtrip.com">savearoundtrip.com</a>
+      publishes an HTTPS record with h3, IP hints, and ECH.
+    </p>
     <p class="dim" style="font-size:12.5px;margin-top:14px">
       Queries Cloudflare's DNS-over-HTTPS endpoint for the <code>HTTPS</code>
       (type&nbsp;65) record, live, from your browser, and decodes the SVCB wire
