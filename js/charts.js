@@ -186,7 +186,8 @@ async function loadGlam() {
   }
   if (metricSrc) {
     metricSrc.innerHTML =
-      `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>. updated ${when}.`;
+      `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
+      `Approximate per-connection estimate.`;
   }
 
   const share = d.h3_discovery.share;
@@ -197,41 +198,33 @@ async function loadGlam() {
   const chartH3 = document.getElementById("chart-h3");
   if (chartH3) {
     renderBars(chartH3, [
-      [BUCKETS.none[0], share.none, "c-none", hc.none],
-      [BUCKETS.altsvc_only[0], share.altsvc_only, "c-altsvc", hc.altsvc_only],
-      [BUCKETS.https_rr_only[0], share.https_rr_only, "c-https", hc.https_rr_only],
-      [BUCKETS.both[0], share.both, "c-both", hc.both],
+      [BUCKETS.none[0], share.none, "c-none"],
+      [BUCKETS.altsvc_only[0], share.altsvc_only, "c-altsvc"],
+      [BUCKETS.https_rr_only[0], share.https_rr_only, "c-https"],
+      [BUCKETS.both[0], share.both, "c-both"],
     ]);
-  }
-  const h3n = document.getElementById("h3-n");
-  if (h3n) {
-    const total = (hc.none || 0) + (hc.altsvc_only || 0) + (hc.https_rr_only || 0) + (hc.both || 0);
-    h3n.textContent = `Based on ${fmt(total)} samples.`;
   }
 
   const trend = document.getElementById("chart-trend");
   if (trend) renderTrend(trend, d.h3_discovery.series);
 
   const f = d.https_rr_features.share_of_records;
-  const fc = d.https_rr_features.counts || {};
   const chartFeat = document.getElementById("chart-feat");
   if (chartFeat) {
     renderBars(chartFeat, [
-      ["h3 in ALPN", f.h3_alpn, "c-https", fc.h3_alpn],
-      ["IPv4 hint", f.ipv4hint, "c-both", fc.ipv4hint],
-      ["IPv6 hint", f.ipv6hint, "c-both", fc.ipv6hint],
-      ["ECH", f.ech, "c-both", fc.ech],
+      ["h3 in ALPN", f.h3_alpn, "c-https"],
+      ["IPv4 hint", f.ipv4hint, "c-both"],
+      ["IPv6 hint", f.ipv6hint, "c-both"],
+      ["ECH", f.ech, "c-both"],
     ]);
   }
-  const featN = document.getElementById("feat-n");
-  if (featN) featN.textContent = `Based on ${fmt(fc.total)} connections that saw an HTTPS record.`;
 
   const src = document.getElementById("data-src");
   if (src) {
     src.innerHTML =
       `Source: Firefox Nightly, via ` +
       `<a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Shares use GLAM's By Client ID normalization.`;
+      `Per-connection estimate reconstructed from GLAM's histograms, so approximate.`;
   }
 }
 

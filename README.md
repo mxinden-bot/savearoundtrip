@@ -83,12 +83,24 @@ Run it on demand instead of waiting for the daily cron: the workflow has a
 `workflow_dispatch` trigger, so you can start it from the repo's **Actions** tab
 ("refresh GLAM data" -> "Run workflow"), or with `gh workflow run glam.yml`.
 
-The headline is **`altsvc_only / (altsvc_only + both + https_rr_only)`**: of the
-connections where the origin supports h3, the share that learned it only from an
-`Alt-Svc` header (no usable HTTPS record), and so reached HTTP/3 only on a later
-connection. If the fetch ever fails, the last committed `data/glam.json` stays
-in place and the page keeps showing it. The GLAM HTTP API is undocumented, so
-treat it as best-effort.
+The headline is the **`altsvc_only`** share of all measured connections: those
+that learned about HTTP/3 only from an `Alt-Svc` header (no usable HTTPS record),
+and so reached HTTP/3 only on a later connection.
+
+**Per-connection vs per-client.** GLAM aggregates per client, so its
+`sample_count` is per-client *reach* ("did this user ever see the feature"),
+which badly overstates per-connection prevalence (e.g. ECH looks like ~64% of
+users but only ~7-15% of connections, because one ubiquitous CDN dominates
+reach). Since every caption here talks about *connections*, we instead
+reconstruct an approximate per-connection count from GLAM's non-normalized
+histograms (`sum of bucket_value x clients_in_bucket`). That's bucketed, so it's
+approximate, a few points off and worst on small categories like ECH; the page
+labels it as such. Exact per-connection numbers live only in the raw `metrics`
+table (STMO/BigQuery), which we avoid to keep to a public, no-auth source.
+
+If the fetch ever fails, the last committed `data/glam.json` stays in place and
+the page keeps showing it. The GLAM HTTP API is undocumented, so treat it as
+best-effort.
 
 ### Possible future addition: an offline domain scan
 

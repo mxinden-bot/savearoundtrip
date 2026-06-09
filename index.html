@@ -286,7 +286,6 @@ sequenceDiagram
       Share of measured connections, Firefox Nightly. The four groups cover
       every connection, so they add up to 100%. The two right-hand groups had a
       usable HTTPS record; <b>Alt-Svc only</b> is the gap a record would close.
-      <span id="h3-n"></span>
     </p>
 
     <h3>How it is developing over time</h3>
@@ -331,10 +330,10 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       record carried each feature.
     </p>
     <div id="chart-feat" class="bars"></div>
-    <p class="chart-cap"><span id="feat-n"></span></p>
     <p class="chart-cap">
       Source: Firefox Nightly, via
       <a href="https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features/explore">GLAM</a>.
+      Per-connection estimate reconstructed from GLAM's histograms, so approximate.
     </p>
   </section>
 
