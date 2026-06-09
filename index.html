@@ -142,23 +142,17 @@
     <div class="seq">
       <div class="seqcol bad">
         <h4>HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up A / AAAA
-    D-->>C: IP address
-    C->>S: TCP + TLS handshake
-    S-->>C: connected (HTTP/2)
-    C->>S: HTTP/2 request
-    S-->>C: response + Alt-Svc: h3
-    Note over C,S: only now does the client learn you speak HTTP/3
-    Note over C,S: Second connection
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-        </pre>
+        <ol class="flow">
+          <li class="phase">first connection</li>
+          <li><span class="hop">&rarr; DNS</span><span>look up A / AAAA</span></li>
+          <li><span class="hop">&larr; DNS</span><span>IP address</span></li>
+          <li><span class="hop">&harr; server</span><span>TCP + TLS handshake, now on HTTP/2</span></li>
+          <li><span class="hop">&rarr; server</span><span>HTTP/2 request</span></li>
+          <li><span class="hop">&larr; server</span><span>response + <b>Alt-Svc: h3</b></span></li>
+          <li class="learn">only now does the client learn you speak HTTP/3</li>
+          <li class="phase">second connection</li>
+          <li><span class="hop">&harr; server</span><span>QUIC + HTTP/3 handshake, now on HTTP/3</span></li>
+        </ol>
         <div class="verdict">HTTP/3 only on the second connection.</div>
       </div>
       <p>
@@ -171,19 +165,13 @@ sequenceDiagram
       </p>
       <div class="seqcol good">
         <h4>HTTP/3 advertised in an HTTPS DNS record</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up HTTPS record
-    D-->>C: alpn=h3 + IP hints (+ ECH)
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-    C->>S: HTTP/3 request
-    S-->>C: response
-        </pre>
+        <ol class="flow">
+          <li class="phase">first connection</li>
+          <li><span class="hop">&rarr; DNS</span><span>look up HTTPS record</span></li>
+          <li><span class="hop">&larr; DNS</span><span><b>alpn=h3</b> + IP hints (+ ECH)</span></li>
+          <li><span class="hop">&harr; server</span><span>QUIC + HTTP/3 handshake, now on HTTP/3</span></li>
+          <li><span class="hop">&rarr; server</span><span>HTTP/3 request</span></li>
+        </ol>
         <div class="verdict">HTTP/3 right away, on the first connection.</div>
       </div>
     </div>
@@ -415,47 +403,5 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 <script src="js/charts.js"></script>
 <script src="js/rtt.js"></script>
 <script src="js/lookup.js"></script>
-<script type="module">
-  // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
-  // only fetch it once the diagrams are about to scroll into view. If it never
-  // loads, the raw diagram source stays visible as a readable fallback.
-  let loaded = false;
-  async function renderDiagrams() {
-    if (loaded) return;
-    loaded = true;
-    try {
-      const { default: mermaid } = await import(
-        "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
-      );
-      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: dark ? "dark" : "default",
-        securityLevel: "loose",
-        fontFamily: "var(--mono)",
-        sequence: { useMaxWidth: true, mirrorActors: false },
-      });
-      await mermaid.run({ querySelector: ".mermaid" });
-    } catch (e) {
-      /* leave the source text visible */
-    }
-  }
-
-  const seq = document.querySelector(".seq");
-  if (seq && "IntersectionObserver" in window) {
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          io.disconnect();
-          renderDiagrams();
-        }
-      },
-      { rootMargin: "400px" }
-    );
-    io.observe(seq);
-  } else {
-    renderDiagrams();
-  }
-</script>
 </body>
 </html>
