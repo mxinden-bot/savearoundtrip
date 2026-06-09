@@ -141,7 +141,7 @@ ul.tick li::before {
   content: "→"; position: absolute; left: 0; color: var(--accent);
 }
 
-/* ---- the round-trip sequence diagrams (mermaid) ---- */
+/* ---- the round-trip sequence diagrams ---- */
 .seq { display: grid; gap: 18px; margin: 20px 0; }
 .seqcol {
   border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
