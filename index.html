@@ -225,13 +225,13 @@ sequenceDiagram
 
     <h3>3 · IP hints: start connecting sooner</h3>
     <p>
-      <code>ipv4hint</code> and <code>ipv6hint</code> ship candidate addresses
-      inside the HTTPS answer, so the client can begin connecting and running
       <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy
-      Eyeballs v3</a> right away, using them as provisional answers while the A
-      and AAAA lookups run in parallel. The client still issues those queries,
-      and the real records supersede the hints once they arrive; the hints just
-      save it from waiting on them to make the first attempt.
+      Eyeballs v3</a> already issues the A, AAAA, and HTTPS queries in parallel.
+      The <code>ipv4hint</code> and <code>ipv6hint</code> inside that HTTPS answer
+      give it candidate addresses to start connecting from when the answer
+      arrives before the A/AAAA records, instead of waiting on them. The A/AAAA
+      records still come and supersede the hints; the hints just keep the first
+      connection attempt from stalling on a lookup that has not returned yet.
       <code>Alt-Svc</code> has no equivalent.
     </p>
 
