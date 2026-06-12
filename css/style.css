@@ -27,7 +27,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -42,7 +42,11 @@ body {
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
+
+/* never let media or wide blocks force the page wider than the viewport */
+img, svg { max-width: 100%; }
 
 .wrap {
   max-width: 860px;
@@ -145,7 +149,7 @@ ul.tick li::before {
 .seq { display: grid; gap: 18px; margin: 20px 0; }
 .seqcol {
   border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
-  padding: 16px 18px; background: var(--bg-inset);
+  padding: 16px 18px; background: var(--bg-inset); min-width: 0;
 }
 .seqcol.bad  { border-left-color: var(--warn); }
 .seqcol.good { border-left-color: var(--accent); }
@@ -171,7 +175,7 @@ ul.tick li::before {
 /* the four headline numbers */
 .statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
 @media (max-width: 560px) { .statgrid { grid-template-columns: repeat(2, 1fr); } }
-.stat { border: 1px solid var(--line); border-radius: 8px; padding: 14px 12px; background: var(--bg-inset); text-align: center; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 14px 12px; background: var(--bg-inset); text-align: center; min-width: 0; }
 .stat .n { font-size: clamp(24px, 6vw, 34px); font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
 .stat .l { color: var(--fg-dim); font-size: 12px; margin-top: 8px; }
 
