@@ -1,0 +1,21 @@
+name: Deploy check-service to Fly
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "check-service/**"
+      - ".github/workflows/fly-deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        working-directory: check-service
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
