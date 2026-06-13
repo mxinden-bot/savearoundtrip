@@ -87,16 +87,13 @@
       publishes an HTTPS record with h3, IP hints, and ECH.
     </p>
     <p class="dim" style="font-size:12.5px;margin-top:14px">
-      Queries Cloudflare's DNS-over-HTTPS endpoint for the <code>HTTPS</code>
-      (type&nbsp;65) record, live, from your browser, and decodes the SVCB wire
-      format. Nothing is sent to a server of ours; there isn't one.
-    </p>
-    <p class="dim" style="font-size:12.5px;margin-top:14px">
-      Can't I just check <code>Alt-Svc</code> too? Not from a web page. CORS
-      forbids reading another origin's response headers in the browser. Spotting
-      the <code>Alt-Svc</code>-but-no-record case across the web has to happen
-      off the browser; that is where the <a href="#data">real-browser data</a>
-      below comes from.
+      The HTTPS record is looked up in your browser via Cloudflare's
+      DNS-over-HTTPS endpoint. The <code>Alt-Svc</code> header and a live HTTP/3
+      handshake can't be checked from a browser (CORS hides cross-origin
+      headers, and a browser can't force a cold QUIC connection), so the domain
+      you enter is sent to a small
+      <a href="https://github.com/mxinden-bot/savearoundtrip/tree/main/check-service">open-source backend</a>
+      that runs only those two checks. Nothing is stored.
     </p>
   </section>
 

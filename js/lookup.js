@@ -8,6 +8,14 @@
 const DOH = "https://cloudflare-dns.com/dns-query";
 const TYPE_HTTPS = 65;
 
+// Backend that checks Alt-Svc (advertised h3) and a real HTTP/3 handshake,
+// since a browser can do neither. See check-service/. If unreachable, the
+// page still works (DNS-only).
+const CHECK_API = "https://savearoundtrip-check.fly.dev/check";
+
+const escapeHtml = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
 // SvcParamKeys: RFC 9460 §14.3.2 (+ the `ech` key).
 const SVC_KEYS = {
   0: "mandatory",
@@ -274,6 +282,60 @@ function verdict(kind, title, sub, extra) {
   return c;
 }
 
+// Asks the backend for Alt-Svc (advertised h3) and a live HTTP/3 handshake,
+// then appends a verdict relating that to the DNS record result.
+async function connectionChecks(domain, target, rrHasH3) {
+  const pending = el("div", "verdict-card");
+  pending.append(el("div", "v-sub", `<span class="spin">checking Alt-Svc and a live HTTP/3 handshake</span>`));
+  target.append(pending);
+
+  let d;
+  try {
+    const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store" });
+    d = await r.json();
+  } catch {
+    pending.replaceWith(verdict("", "Live HTTP/3 check unavailable", "Couldn't reach the checker; the DNS result above still stands."));
+    return;
+  }
+  if (d.error) {
+    pending.replaceWith(verdict("", "Live HTTP/3 check skipped", escapeHtml(d.error) + "."));
+    return;
+  }
+
+  const speaks = d.h3_handshake_ok;
+  let kind = "", title = "", sub = "", extra = null;
+  if (speaks && rrHasH3) {
+    kind = "ok";
+    title = "Speaks HTTP/3, and advertises it in DNS ✓";
+    sub = "Optimal: clients can use HTTP/3 on the very first connection.";
+  } else if (speaks && !rrHasH3) {
+    kind = "warn";
+    title = "Speaks HTTP/3, but not advertised in DNS";
+    sub =
+      "This is the gap: the server completes an HTTP/3 handshake" +
+      (d.advertises_h3 ? " and sends <code>Alt-Svc: h3</code>" : "") +
+      ", but publishes no h3 HTTPS record, so the first connection can't use HTTP/3. Publish one:";
+    extra = publishHint(domain);
+  } else if (d.advertises_h3) {
+    kind = "warn";
+    title = "Advertises h3, but no handshake from our checker";
+    sub = "The <code>Alt-Svc</code> header lists h3, but a live HTTP/3 handshake didn't complete from our checker (it may be geo/rate-limited or briefly down).";
+  } else {
+    title = "No HTTP/3 detected";
+    sub = "No <code>Alt-Svc: h3</code> and no HTTP/3 handshake, so the server likely doesn't serve HTTP/3.";
+  }
+
+  const v = verdict(kind, title, sub, extra);
+  const facts = el("ul", "facts");
+  const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
+  const row = (k, val) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${val}</span>`));
+  row("Alt-Svc h3", yn(d.advertises_h3));
+  row("HTTP/3 handshake", yn(d.h3_handshake_ok));
+  if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
+  v.append(facts);
+  pending.replaceWith(v);
+}
+
 /* ---- wire-up ---- */
 
 function init() {
@@ -307,6 +369,8 @@ function init() {
     try {
       const out = await lookup(domain);
       render(domain, out, result);
+      const rrHasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
+      connectionChecks(domain, result, rrHasH3);
     } catch (e) {
       result.innerHTML = "";
       result.append(
