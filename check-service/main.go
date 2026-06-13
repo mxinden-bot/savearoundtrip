@@ -44,6 +44,20 @@ type result struct {
 
 const ua = "savearoundtrip-check/1.0 (+https://savearoundtrip.com)"
 
+// Browsers from these origins may read the response. Other sites can't embed
+// this endpoint (the request still works from curl etc.; CORS only gates browsers).
+var allowedOrigins = map[string]bool{
+	"https://savearoundtrip.com":     true,
+	"https://www.savearoundtrip.com": true,
+}
+
+func setCORS(w http.ResponseWriter, r *http.Request) {
+	if origin := r.Header.Get("Origin"); allowedOrigins[origin] {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
+	w.Header().Set("Vary", "Origin")
+}
+
 // reject anything that doesn't resolve to a public address (SSRF guard)
 func publicResolvable(host string) error {
 	ips, err := net.LookupIP(host)
@@ -97,7 +111,7 @@ func checkH3(ctx context.Context, host string) bool {
 }
 
 func handleCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	setCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "86400")
