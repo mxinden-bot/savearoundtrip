@@ -52,21 +52,24 @@
     const total = s.end;
     if (!(total > 0)) return;
 
-    // Warm or cached navigation: the connection was reused, so there is no
-    // setup cost to show here. Point back at the live round-trip bar instead.
-    if (s.reused || s.cached) {
+    // Whole document came from disk cache: there was no network this load.
+    if (s.cached) {
       el.innerHTML =
-        `<p class="pl-note">On this visit your connection was already warm, so ` +
-        `this page paid almost no setup cost. The bar above shows what a cold ` +
-        `first connection costs.</p>`;
+        `<p class="pl-note">This page came from your browser cache on this visit, ` +
+        `so it cost almost nothing to load. The bar above shows what a cold first ` +
+        `connection costs.</p>`;
       el.hidden = false;
       return;
     }
 
+    // The connection is often already warm by the time the document loads
+    // (browsers pre-open it), so connect can read ~0. Show a connection segment
+    // only when it is real; either way still show the rest of the budget.
+    const showConn = s.connect > 0.5;
     const connClass = s.proto === "h3" ? "pl-conn good" : "pl-conn warn";
     const segs = [
       ["DNS lookup", s.dns, "pl-dns"],
-      ["Connection setup", s.connect, connClass],
+      ["Connection setup", showConn ? s.connect : 0, connClass],
       ["Server wait", s.wait, "pl-wait"],
       ["Download", s.download, "pl-dl"],
       ["Render to first paint", s.render, "pl-render"],
@@ -90,38 +93,40 @@
       .join("");
 
     const pn = protoName(s.proto);
-    let headline;
-    if (s.proto === "h3") {
-      headline =
-        `This page reached you over <span class="pl-badge good">HTTP/3</span> on ` +
-        `its first connection. Opening it took <b>~${ms(s.connect)} ms</b>, about ` +
-        `one QUIC round trip. Discovered through <code>Alt-Svc</code> instead, ` +
-        `HTTP/3 would arrive only on a later connection.`;
-    } else if (pn) {
-      headline =
-        `This page reached you over <span class="pl-badge">${pn}</span>. Opening ` +
-        `the connection took <b>~${ms(s.connect)} ms</b>` +
+    const proto = pn
+      ? `This page reached you over <span class="pl-badge${
+          s.proto === "h3" ? " good" : ""
+        }">${pn}</span>. `
+      : ``;
+    let setup;
+    if (showConn && s.proto === "h3") {
+      setup =
+        `Opening that connection took <b>~${ms(s.connect)} ms</b>, about one QUIC ` +
+        `round trip; discovered through <code>Alt-Svc</code> instead it would ` +
+        `arrive only on a later connection.`;
+    } else if (showConn) {
+      setup =
+        `Opening the connection took <b>~${ms(s.connect)} ms</b>` +
         (s.tls > 0.5 ? `, roughly two round trips (TCP, then TLS)` : ``) +
-        `. Over HTTP/3 from a published HTTPS record, that first connection ` +
-        `could be about one round trip.`;
+        `. Over HTTP/3 from a published HTTPS record, that could be about one ` +
+        `round trip.`;
     } else {
-      headline =
-        `Opening this page's connection took <b>~${ms(s.connect)} ms</b> before ` +
-        `any content arrived. That setup is the part a published HTTPS record ` +
-        `shrinks.`;
+      setup =
+        `Your connection here was already warm (browsers often pre-open it), so it ` +
+        `cost about nothing this time. The bar above shows what a cold round trip ` +
+        `costs, the one a published HTTPS record saves on a first connection.`;
     }
 
     el.innerHTML =
-      `<p class="pl-headline">${headline}</p>` +
-      `<div class="pl-bar">${bar}</div>` +
-      `<div class="pl-key">${key}` +
-      `<span class="pl-keyitem pl-total">total to first paint <b>${ms(
-        total,
-      )} ms</b></span></div>` +
+      `<p class="pl-headline">${proto}${setup}</p>` +
+      (segs.length
+        ? `<div class="pl-bar">${bar}</div>` +
+          `<div class="pl-key">${key}<span class="pl-keyitem pl-total">total to ` +
+          `first paint <b>${ms(total)} ms</b></span></div>`
+        : ``) +
       `<p class="pl-note">This page is static and tiny, so its whole budget is ` +
-      `small and the connection setup looms large here. A real app's budget is ` +
-      `bigger, but that setup is the same fixed cost, paid up front before any ` +
-      `content, and often to several origins.</p>`;
+      `small. A real app's budget is bigger, but the connection setup is the same ` +
+      `fixed cost, paid up front before any content and often to several origins.</p>`;
     el.hidden = false;
   }
 
