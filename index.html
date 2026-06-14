@@ -114,14 +114,6 @@
       (<a href="https://www.nngroup.com/articles/response-times-3-important-limits/">Nielsen
       Norman Group</a>).
     </p>
-    <p>
-      And it is the cost of opening a connection: each new QUIC or TCP connection
-      takes a round trip to set up (barring 0-RTT resumption), then is reused for
-      later requests. A page usually talks to several origins (a subdomain, a
-      CDN, third parties), each its own connection, so one load often pays it
-      several times. Browsers coalesce origins that share an IP and certificate
-      onto a single connection; the rest each pay their own.
-    </p>
     <div id="pageload-viz" class="plviz" hidden></div>
   </section>
 
