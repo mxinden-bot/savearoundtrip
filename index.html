@@ -369,22 +369,32 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     </p>
 
     <h3>Which browsers use the HTTPS record to reach HTTP/3?</h3>
+    <ul class="browsers">
+      <li>
+        <b>Firefox</b>: reliably. It queries the HTTPS record during name
+        resolution and opens HTTP/3 on the very first connection when the
+        record carries <code>alpn="h3"</code>.
+      </li>
+      <li>
+        <b>Safari</b>: same. It queries the record and upgrades on the first
+        connection.
+      </li>
+      <li>
+        <b>Chrome</b>: yes, but conditionally. It has done this by default
+        for a few years (the old <code>use-dns-https-svcb-alpn</code> flag
+        graduated and was removed), but it only sends the HTTPS query when it
+        resolves through a path that supports it: Secure DNS (DoH) enabled, or
+        its built-in resolver in use. With the plain OS resolver and no DoH,
+        the common case for most users, Chrome never receives the record and
+        falls back to <code>Alt-Svc</code>.
+      </li>
+    </ul>
     <p>
-      Firefox and Safari do so reliably. Both query the HTTPS record during
-      name resolution and open HTTP/3 on the very first connection when it
-      carries <code>alpn="h3"</code>. Chrome can too, and has by default for
-      a few years now (the old <code>use-dns-https-svcb-alpn</code> flag
-      graduated and was removed). The catch is that Chrome only sends the
-      HTTPS query when it resolves through a path that supports it: in
-      practice when Secure DNS (DoH) is enabled, or its built-in resolver is
-      in use. With the plain OS resolver and no DoH, the common case for most
-      users, Chrome never receives the record and falls back to
-      <code>Alt-Svc</code>. That is why aggregate measurements still show
-      Chrome leaning on Alt-Svc (in one APNIC study only 0.3% of Chrome
-      clients sent an HTTPS query, versus about 90% of Safari clients,
-      <a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
-      Jul 2025</a>), even though a DoH-enabled Chromium upgrades straight from
-      the record. Publish both and every browser is covered.
+      So publish both and every browser is covered. The Chrome gap also shows
+      up in the wild: in one measurement only 0.3% of Chrome clients sent an
+      HTTPS query, versus about 90% of Safari clients
+      (<a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
+      Jul 2025</a>).
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
