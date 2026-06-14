@@ -151,8 +151,10 @@ sequenceDiagram
     Note over C,S: First connection
     C->>D: look up A / AAAA
     D-->>C: IP address
-    C->>S: TCP + TLS handshake
-    S-->>C: connected (HTTP/2)
+    C->>S: TCP SYN
+    S-->>C: SYN-ACK
+    C->>S: TLS ClientHello
+    S-->>C: TLS ServerHello, Finished
     C->>S: HTTP/2 request
     S-->>C: response + Alt-Svc: h3
     Note over C,S: only now does the client learn you speak HTTP/3
@@ -366,11 +368,26 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       the lookup too.
     </p>
 
+    <h3>Which browsers use the HTTPS record to reach HTTP/3?</h3>
+    <p>
+      Firefox and Safari do. Both query the HTTPS record during name
+      resolution and will open HTTP/3 on the very first connection when it
+      carries <code>alpn="h3"</code>. Chrome does not, yet. As of 2025 it
+      still learns about HTTP/3 almost entirely from the <code>Alt-Svc</code>
+      header. In one large measurement only 0.3% of Chrome clients even sent
+      an HTTPS query, versus about 90% of Safari clients
+      (<a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
+      Jul 2025</a>). So for Chrome the HTTP/3 upgrade still lands on a later
+      connection. That is a big part of why <code>Alt-Svc</code> is still
+      everywhere, and why you want to publish both.
+    </p>
+
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
-      Not yet. Keep sending it as a fallback for clients that did not get the
-      HTTPS record. With the record in place, most clients learn about HTTP/3
-      from DNS instead, and no longer spend a round trip discovering it.
+      No. Keep sending it. Chrome still relies on it almost entirely, and it
+      is the fallback for any client that did not get the HTTPS record. With
+      the record in place, Firefox and Safari learn about HTTP/3 from DNS
+      instead, and no longer spend a round trip discovering it.
     </p>
   </section>
 
