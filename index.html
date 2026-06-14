@@ -369,41 +369,22 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     </p>
 
     <h3>Which browsers use the HTTPS record to reach HTTP/3?</h3>
-    <ul class="browsers">
-      <li>
-        <b>Firefox</b>: reliably. It queries the HTTPS record during name
-        resolution and opens HTTP/3 on the very first connection when the
-        record carries <code>alpn="h3"</code>.
-      </li>
-      <li>
-        <b>Safari</b>: same. It queries the record and upgrades on the first
-        connection.
-      </li>
-      <li>
-        <b>Chrome</b>: yes, and by default for a few years now (the old
-        <code>use-dns-https-svcb-alpn</code> flag graduated and was removed).
-        Whether it actually sends the HTTPS query depends on which DNS
-        resolver it uses, which varies by platform and configuration, so
-        coverage is uneven across the Chrome population. Many setups read the
-        record and upgrade on the first connection; many others never request
-        it and fall back to <code>Alt-Svc</code>.
-      </li>
-    </ul>
     <p>
-      So publish both and every browser is covered. The Chrome gap also shows
-      up in the wild: in one measurement only 0.3% of Chrome clients sent an
-      HTTPS query, versus about 90% of Safari clients
-      (<a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
-      Jul 2025</a>).
+      All the major engines support it and ship it on by default:
+      <a href="https://chromestatus.com/feature/5154357283651584">Chrome</a>,
+      <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1721132">Firefox</a>,
+      and <a href="https://mailarchive.ietf.org/arch/msg/dnsop/ldaCto09yaOuSXM92HgJhGqmPJw/">Safari</a>.
+      When a browser reads an HTTPS record carrying <code>alpn="h3"</code>
+      during name resolution, it can open HTTP/3 on the very first connection,
+      with no <code>Alt-Svc</code> round trip first.
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
-      No. Keep sending it. It is the fallback for any client that did not get
-      the HTTPS record, which today is most Chrome users (those without Secure
-      DNS). With the record in place, Firefox, Safari, and DoH-enabled Chrome
-      learn about HTTP/3 from DNS instead, and no longer spend a round trip
-      discovering it.
+      No. Keep sending it as a fallback for anything that did not get the HTTPS
+      record: older clients, and resolvers or networks that do not deliver it.
+      With the record in place, browsers that do read it learn about HTTP/3 from
+      DNS instead, and no longer spend a round trip discovering it.
     </p>
   </section>
 
