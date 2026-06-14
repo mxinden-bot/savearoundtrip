@@ -96,11 +96,11 @@
       ? `over <span class="pl-badge${s.proto === "h3" ? " good" : ""}">${pn}</span> `
       : ``;
     const rttLine = rtt
-      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>: about the ` +
-        `wait for the first byte above, and exactly what a published HTTPS record saves ` +
-        `a browser on its first connection.`
-      : ` A published HTTPS record saves a browser one round trip on its first ` +
-        `connection.`;
+      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. That ` +
+        `round trip is exactly what a published HTTPS record saves when a browser ` +
+        `first connects.`
+      : ` A published HTTPS record saves a browser one round trip when it first ` +
+        `connects.`;
 
     el.innerHTML =
       `<p class="pl-headline">This page reached you ${proto}in <b>~${ms(total)} ms</b> ` +

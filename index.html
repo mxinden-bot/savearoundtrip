@@ -115,11 +115,12 @@
       Norman Group</a>).
     </p>
     <p>
-      And it is paid once per origin, on the first connection only. A page
-      usually pulls from several origins (a subdomain, a CDN, third parties), so
-      it is often paid several times in one load. Browsers coalesce origins that
-      share an IP and certificate onto one connection; the rest each pay their
-      own.
+      And it is the cost of opening a connection: each new QUIC or TCP connection
+      takes a round trip to set up (barring 0-RTT resumption), then is reused for
+      later requests. A page usually talks to several origins (a subdomain, a
+      CDN, third parties), each its own connection, so one load often pays it
+      several times. Browsers coalesce origins that share an IP and certificate
+      onto a single connection; the rest each pay their own.
     </p>
     <div id="pageload-viz" class="plviz" hidden></div>
   </section>
