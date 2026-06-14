@@ -370,24 +370,30 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
     <h3>Which browsers use the HTTPS record to reach HTTP/3?</h3>
     <p>
-      Firefox and Safari do. Both query the HTTPS record during name
-      resolution and will open HTTP/3 on the very first connection when it
-      carries <code>alpn="h3"</code>. Chrome does not, yet. As of 2025 it
-      still learns about HTTP/3 almost entirely from the <code>Alt-Svc</code>
-      header. In one large measurement only 0.3% of Chrome clients even sent
-      an HTTPS query, versus about 90% of Safari clients
-      (<a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
-      Jul 2025</a>). So for Chrome the HTTP/3 upgrade still lands on a later
-      connection. That is a big part of why <code>Alt-Svc</code> is still
-      everywhere, and why you want to publish both.
+      Firefox and Safari do so reliably. Both query the HTTPS record during
+      name resolution and open HTTP/3 on the very first connection when it
+      carries <code>alpn="h3"</code>. Chrome can too, and has by default for
+      a few years now (the old <code>use-dns-https-svcb-alpn</code> flag
+      graduated and was removed). The catch is that Chrome only sends the
+      HTTPS query when it resolves through a path that supports it: in
+      practice when Secure DNS (DoH) is enabled, or its built-in resolver is
+      in use. With the plain OS resolver and no DoH, the common case for most
+      users, Chrome never receives the record and falls back to
+      <code>Alt-Svc</code>. That is why aggregate measurements still show
+      Chrome leaning on Alt-Svc (in one APNIC study only 0.3% of Chrome
+      clients sent an HTTPS query, versus about 90% of Safari clients,
+      <a href="https://blog.apnic.net/2025/07/15/triggering-quic/">APNIC,
+      Jul 2025</a>), even though a DoH-enabled Chromium upgrades straight from
+      the record. Publish both and every browser is covered.
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
-      No. Keep sending it. Chrome still relies on it almost entirely, and it
-      is the fallback for any client that did not get the HTTPS record. With
-      the record in place, Firefox and Safari learn about HTTP/3 from DNS
-      instead, and no longer spend a round trip discovering it.
+      No. Keep sending it. It is the fallback for any client that did not get
+      the HTTPS record, which today is most Chrome users (those without Secure
+      DNS). With the record in place, Firefox, Safari, and DoH-enabled Chrome
+      learn about HTTP/3 from DNS instead, and no longer spend a round trip
+      discovering it.
     </p>
   </section>
 
