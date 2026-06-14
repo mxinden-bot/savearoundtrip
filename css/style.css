@@ -145,7 +145,7 @@ ul.tick li::before {
   content: "→"; position: absolute; left: 0; color: var(--accent);
 }
 
-/* ---- the round-trip sequence diagrams (mermaid) ---- */
+/* ---- the round-trip sequence diagrams ---- */
 .seq { display: grid; gap: 18px; margin: 20px 0; }
 .seqcol {
   border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
@@ -156,11 +156,19 @@ ul.tick li::before {
 .seqcol h4 { margin: 0 0 14px; font-size: 13px; letter-spacing: .04em; }
 .seqcol.bad h4  { color: var(--warn); }
 .seqcol.good h4 { color: var(--accent); }
-/* before mermaid runs, .mermaid is a <pre>; reset the code-block chrome */
-.seqcol .mermaid {
-  background: none; border: 0; padding: 0; margin: 0; overflow-x: auto;
-  text-align: center; color: var(--fg-faint); font-size: 12px; line-height: 1.45;
+/* step-flow: one row per hop, no lifelines to overlap */
+.flow { list-style: none; margin: 0; padding: 0; }
+.flow li { display: flex; gap: 12px; align-items: baseline; padding: 4px 0; font-size: 13px; color: var(--fg); }
+.flow .hop {
+  flex: 0 0 76px; text-align: right; white-space: nowrap;
+  font-family: var(--mono); font-size: 11.5px; color: var(--fg-dim);
 }
+.flow li.phase {
+  display: block; margin: 12px 0 4px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--fg-faint);
+}
+.flow li.phase:first-child { margin-top: 0; }
+.flow li.learn { display: block; color: var(--warn); font-size: 12.5px; padding: 6px 0 2px; }
 .seqcol .verdict { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
 .seqcol.bad .verdict  { color: var(--warn); }
 .seqcol.good .verdict { color: var(--accent); }
