@@ -127,6 +127,7 @@
       first connection, a single round trip can eat that whole budget.
     </p>
     <div id="rtt-viz" class="rttbar" hidden></div>
+    <div id="pageload-viz" class="plviz" hidden></div>
   </section>
 
   <!-- WHY -->
@@ -428,6 +429,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 </script>
 <script src="js/charts.js"></script>
 <script src="js/rtt.js"></script>
+<script src="js/perf.js"></script>
 <script src="js/lookup.js"></script>
 <script type="module">
   // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
