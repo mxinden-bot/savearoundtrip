@@ -96,11 +96,14 @@
       ? `over <span class="pl-badge${s.proto === "h3" ? " good" : ""}">${pn}</span> `
       : ``;
     const rttLine = rtt
-      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. That ` +
-        `round trip is exactly what a published HTTPS record saves when a browser ` +
-        `first connects.`
-      : ` A published HTTPS record saves a browser one round trip when it first ` +
-        `connects.`;
+      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>, and a ` +
+        `published HTTPS record saves it: the browser can open QUIC on its first ` +
+        `connection, and a QUIC handshake is a round trip shorter than TCP plus TLS, ` +
+        `rather than spending a whole connection just to learn about HTTP/3 from ` +
+        `Alt-Svc.`
+      : ` A published HTTPS record lets the browser open QUIC on its first ` +
+        `connection, a round trip shorter than TCP plus TLS, rather than discovering ` +
+        `HTTP/3 from Alt-Svc a connection later.`;
 
     el.innerHTML =
       `<p class="pl-headline">This page reached you ${proto}in <b>~${ms(total)} ms</b> ` +
