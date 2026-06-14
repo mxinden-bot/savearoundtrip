@@ -105,28 +105,16 @@
   <section id="cost">
     <h2>what a round trip costs</h2>
     <p>
-      A round trip is the time for one message to reach the server and come
-      back, bounded by the speed of light: very roughly 5 to 20 ms within a
-      city, 40 to 80 ms across a country, and 150 ms or more across an ocean or
-      over a mobile network. Real latency depends on where you and the server
-      are; see <a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a>
-      for more data.
+      A round trip is one message to the server and back, bounded by the speed
+      of light: roughly 5 to 20 ms within a city, 40 to 80 ms across a country,
+      and 150 ms or more across an ocean or a mobile network
+      (<a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a> has
+      live numbers). It is paid where people notice: under about 100 ms an
+      interaction feels instantaneous; past that it feels like waiting
+      (<a href="https://www.nngroup.com/articles/response-times-3-important-limits/">Nielsen
+      Norman Group</a>).
     </p>
-    <p>
-      You pay it once per origin, on the first connection only; later requests
-      reuse that connection. A page often pulls from several origins (a
-      subdomain, a CDN, some third parties), so it can be paid several times in
-      one load. Browsers do coalesce origins that resolve to the same server and
-      share a certificate onto a single connection, which avoids the extra cost;
-      origins that do not coalesce each pay their own.
-    </p>
-    <p>
-      And it is paid where people notice. Under about 100 ms an interaction
-      feels instant; past that it starts to feel like waiting
-      (<a href="https://web.dev/articles/rail">Google's RAIL model</a>). On the
-      first connection, a single round trip can eat that whole budget.
-    </p>
-    <div id="rtt-viz" class="rttbar" hidden></div>
+    <div id="pageload-viz" class="plviz" hidden></div>
   </section>
 
   <!-- WHY -->
@@ -424,7 +412,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
   })();
 </script>
 <script src="js/charts.js"></script>
-<script src="js/rtt.js"></script>
+<script src="js/perf.js"></script>
 <script src="js/lookup.js"></script>
 <script type="module">
   // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
