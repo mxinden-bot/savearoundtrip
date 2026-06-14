@@ -380,13 +380,13 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
         connection.
       </li>
       <li>
-        <b>Chrome</b>: yes, but conditionally. It has done this by default
-        for a few years (the old <code>use-dns-https-svcb-alpn</code> flag
-        graduated and was removed), but it only sends the HTTPS query when it
-        resolves through a path that supports it: Secure DNS (DoH) enabled, or
-        its built-in resolver in use. With the plain OS resolver and no DoH,
-        the common case for most users, Chrome never receives the record and
-        falls back to <code>Alt-Svc</code>.
+        <b>Chrome</b>: yes, and by default for a few years now (the old
+        <code>use-dns-https-svcb-alpn</code> flag graduated and was removed).
+        Whether it actually sends the HTTPS query depends on which DNS
+        resolver it uses, which varies by platform and configuration, so
+        coverage is uneven across the Chrome population. Many setups read the
+        record and upgrade on the first connection; many others never request
+        it and fall back to <code>Alt-Svc</code>.
       </li>
     </ul>
     <p>
