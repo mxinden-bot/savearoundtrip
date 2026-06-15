@@ -199,58 +199,16 @@ function publishHint(domain) {
   return wrap;
 }
 
-function render(domain, out, target) {
-  target.innerHTML = "";
-
-  if (!out.records.length) {
-    target.append(
-      verdict(
-        "warn",
-        "No HTTPS record published",
-        `<code>${domain}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
-          `can only discover that <i>after</i> a first connection (e.g. via an ` +
-          `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
-          `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`,
-        publishHint(domain)
-      )
-    );
-    return;
-  }
-
-  const aliasOnly = out.records.every((r) => r.priority === 0);
+function summarizeDns(out) {
+  const hasRecord = out.records.length > 0;
+  const aliasOnly = hasRecord && out.records.every((r) => r.priority === 0);
   const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
+  return { hasRecord, aliasOnly, hasH3 };
+}
 
-  if (aliasOnly) {
-    target.append(
-      verdict(
-        "warn",
-        "HTTPS record is an alias (AliasMode)",
-        `This is a priority-0 AliasMode record pointing at ` +
-          `<code>${out.records[0].target}</code>. The h3 / ECH / hint parameters ` +
-          `live on the HTTPS record at that target, not here.`
-      )
-    );
-  } else if (hasH3) {
-    target.append(
-      verdict(
-        "ok",
-        "HTTPS record found: advertises h3 ✓",
-        `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
-          `No round trip wasted.`
-      )
-    );
-  } else {
-    target.append(
-      verdict(
-        "warn",
-        "HTTPS record found, but no h3 in ALPN",
-        `The record exists but doesn't list <code>h3</code>, so clients won't ` +
-          `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`,
-        publishHint(domain)
-      )
-    );
-  }
-
+// The HTTPS record's parameters, one <ul> per record.
+function recordFacts(out) {
+  const frag = document.createDocumentFragment();
   out.records.forEach((r, i) => {
     const p = r.params;
     const facts = el("ul", "facts");
@@ -259,19 +217,111 @@ function render(domain, out, target) {
 
     if (out.records.length > 1) row("record", `#${i + 1}`);
     row("mode", r.priority === 0 ? "0 (AliasMode)" : `${r.priority} (ServiceMode)`);
-    row("target", `<code>${r.target}</code>${r.target === "." ? " <span class=\"dim\">(same as owner)</span>" : ""}`);
+    row("target", `<code>${escapeHtml(r.target)}</code>${r.target === "." ? " <span class=\"dim\">(same as owner)</span>" : ""}`);
     if (p.alpn) row("alpn", pills(p.alpn, (x) => x === "h3"));
     if (p["no-default-alpn"]) row("no-default-alpn", "set");
     if (p.port != null) row("port", String(p.port));
     if (p.ipv4hint) row("ipv4hint", pills(p.ipv4hint));
     if (p.ipv6hint) row("ipv6hint", pills(p.ipv6hint));
-    row("ech", p.ech ? `<span class="val">configured (${p.ech} bytes) ✓</span>` : "<span class=\"dim\">not set</span>");
+    row("ech", p.ech ? `configured (${p.ech} bytes) ✓` : `<span class="dim">not set</span>`);
     if (r.ttl != null) row("ttl", `${r.ttl}s`);
-
-    const card = el("div", "verdict-card");
-    card.append(facts);
-    target.append(card);
+    frag.append(facts);
   });
+  return frag;
+}
+
+// Evidence card 1: what DNS says.
+function dnsCard(domain, out, dns) {
+  const card = el("div", "evidence");
+  card.append(el("div", "ev-head", `In DNS <span class="ev-dim">— the HTTPS record</span>`));
+  if (!dns.hasRecord) {
+    card.append(el("div", "ev-empty", `No HTTPS record for <code>${escapeHtml(domain)}</code>.`));
+  } else {
+    card.append(recordFacts(out));
+  }
+  return card;
+}
+
+// Evidence card 2: what the server actually does (filled in async).
+function wireCard() {
+  const card = el("div", "evidence");
+  card.append(el("div", "ev-head", `Over the wire <span class="ev-dim">— what the server does</span>`));
+  card._body = el("div", "ev-body", `<span class="spin">checking Alt-Svc and a live HTTP/3 handshake…</span>`);
+  card.append(card._body);
+  return card;
+}
+
+function fillWire(card, live) {
+  const body = card._body;
+  body.innerHTML = "";
+  if (live.state === "unavailable") {
+    body.append(el("div", "ev-empty", "Couldn't reach the checker (it may be waking up). The DNS result still stands; try again in a moment."));
+    return;
+  }
+  if (live.state === "skipped") {
+    body.append(el("div", "ev-empty", escapeHtml(live.error || "check skipped") + "."));
+    return;
+  }
+  const facts = el("ul", "facts");
+  const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
+  const row = (k, v) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${v}</span>`));
+  row("Alt-Svc lists h3", yn(live.advertises_h3));
+  row("HTTP/3 handshake", yn(live.h3_handshake_ok));
+  if (live.alt_svc) row("Alt-Svc", `<code>${escapeHtml(live.alt_svc)}</code>`);
+  body.append(facts);
+}
+
+// The single combined verdict, derived from DNS plus the live check.
+function computeVerdict(domain, dns, live) {
+  const done = live.state === "done";
+  const checking = live.state === "pending";
+  const speaks = done && (live.h3_handshake_ok || live.advertises_h3);
+  const tail = checking ? ` <span class="dim">(checking the server live…)</span>` : ``;
+
+  if (dns.aliasOnly) {
+    return ["warn", "HTTPS record is an alias (AliasMode)",
+      `It points elsewhere; the h3 / ECH / hint parameters live on the HTTPS record at that target, not here.${tail}`];
+  }
+  if (!dns.hasRecord) {
+    if (done && speaks) {
+      return ["warn", "Speaks HTTP/3, but nothing in DNS",
+        `This is the gap: the server does HTTP/3, but with no HTTPS record the first connection can't use it. Publish one:`,
+        publishHint(domain)];
+    }
+    if (checking) {
+      return ["warn", "No HTTPS record", `Checking whether the server speaks HTTP/3 anyway…`];
+    }
+    return ["warn", "No HTTPS record",
+      `Publish one with <code>alpn="h3"</code> so browsers reach HTTP/3 on the first connection:`,
+      publishHint(domain)];
+  }
+  if (dns.hasH3) {
+    if (done && live.h3_handshake_ok) {
+      return ["ok", "Optimal: HTTP/3 on the first connection ✓",
+        `Advertised in DNS, and the server completes a live HTTP/3 handshake.`];
+    }
+    if (done) {
+      return ["ok", "Advertises h3 in DNS ✓",
+        `Browsers can try HTTP/3 on the first connection. Our checker didn't complete a live handshake just now (it may be rate-limited, or the server was briefly unreachable).`];
+    }
+    return ["ok", "Advertises h3 in DNS ✓",
+      `Browsers can negotiate HTTP/3 on the first connection.${tail}`];
+  }
+  // ServiceMode record without h3
+  if (done && speaks) {
+    return ["warn", "Server speaks HTTP/3, but DNS doesn't list it",
+      `Add <code>h3</code> to the record's <code>alpn</code> so the first connection can use it:`,
+      publishHint(domain)];
+  }
+  return ["warn", "HTTPS record has no h3",
+    `The record exists but doesn't list <code>h3</code>. Add it to the <code>alpn</code> set:`,
+    publishHint(domain)];
+}
+
+function renderVerdict(slot, domain, dns, live) {
+  const [kind, title, sub, extra] = computeVerdict(domain, dns, live);
+  slot.innerHTML = "";
+  slot.append(verdict(kind, title, sub, extra));
 }
 
 function verdict(kind, title, sub, extra) {
@@ -282,58 +332,46 @@ function verdict(kind, title, sub, extra) {
   return c;
 }
 
-// Asks the backend for Alt-Svc (advertised h3) and a live HTTP/3 handshake,
-// then appends a verdict relating that to the DNS record result.
-async function connectionChecks(domain, target, rrHasH3) {
-  const pending = el("div", "verdict-card");
-  pending.append(el("div", "v-sub", `<span class="spin">checking Alt-Svc and a live HTTP/3 handshake</span>`));
-  target.append(pending);
+// The checker scales to zero (Fly), so the first call can be a cold start.
+// Allow generous time and one retry before giving up.
+async function fetchCheck(domain) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store", signal: ctrl.signal });
+        return await r.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      if (attempt === 1) throw e;
+      await new Promise((res) => setTimeout(res, 1200));
+    }
+  }
+}
 
-  let d;
+// Ask the backend for Alt-Svc + a live HTTP/3 handshake, then fill the wire
+// card and fold the result into the single combined verdict.
+async function connectionChecks(domain, dns, vSlot, wCard) {
+  let live;
   try {
-    const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store" });
-    d = await r.json();
+    const d = await fetchCheck(domain);
+    live = d.error ? { state: "skipped", error: d.error } : { state: "done", ...d };
   } catch {
-    pending.replaceWith(verdict("", "Live HTTP/3 check unavailable", "Couldn't reach the checker; the DNS result above still stands."));
-    return;
+    live = { state: "unavailable" };
   }
-  if (d.error) {
-    pending.replaceWith(verdict("", "Live HTTP/3 check skipped", escapeHtml(d.error) + "."));
-    return;
-  }
+  fillWire(wCard, live);
+  renderVerdict(vSlot, domain, dns, live);
+}
 
-  const speaks = d.h3_handshake_ok;
-  let kind = "", title = "", sub = "", extra = null;
-  if (speaks && rrHasH3) {
-    kind = "ok";
-    title = "Speaks HTTP/3, and advertises it in DNS ✓";
-    sub = "Optimal: clients can use HTTP/3 on the very first connection.";
-  } else if (speaks && !rrHasH3) {
-    kind = "warn";
-    title = "Speaks HTTP/3, but not advertised in DNS";
-    sub =
-      "This is the gap: the server completes an HTTP/3 handshake" +
-      (d.advertises_h3 ? " and sends <code>Alt-Svc: h3</code>" : "") +
-      ", but publishes no h3 HTTPS record, so the first connection can't use HTTP/3. Publish one:";
-    extra = publishHint(domain);
-  } else if (d.advertises_h3) {
-    kind = "warn";
-    title = "Advertises h3, but no handshake from our checker";
-    sub = "The <code>Alt-Svc</code> header lists h3, but a live HTTP/3 handshake didn't complete from our checker (it may be geo/rate-limited or briefly down).";
-  } else {
-    title = "No HTTP/3 detected";
-    sub = "No <code>Alt-Svc: h3</code> and no HTTP/3 handshake, so the server likely doesn't serve HTTP/3.";
-  }
-
-  const v = verdict(kind, title, sub, extra);
-  const facts = el("ul", "facts");
-  const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
-  const row = (k, val) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${val}</span>`));
-  row("Alt-Svc h3", yn(d.advertises_h3));
-  row("HTTP/3 handshake", yn(d.h3_handshake_ok));
-  if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
-  v.append(facts);
-  pending.replaceWith(v);
+// Wake the checker as soon as the user engages, to dodge cold-start delays.
+let warmed = false;
+function warmChecker() {
+  if (warmed) return;
+  warmed = true;
+  fetch(`${CHECK_API}?domain=savearoundtrip.com`, { cache: "no-store" }).catch(() => {});
 }
 
 /* ---- wire-up ---- */
@@ -344,6 +382,8 @@ function init() {
   const btn = document.getElementById("go");
   const result = document.getElementById("result");
   if (!form) return;
+
+  if (input) input.addEventListener("focus", warmChecker, { once: true });
 
   async function run(domain) {
     domain = (domain || "")
@@ -368,9 +408,13 @@ function init() {
     result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
     try {
       const out = await lookup(domain);
-      render(domain, out, result);
-      const rrHasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
-      connectionChecks(domain, result, rrHasH3);
+      const dns = summarizeDns(out);
+      result.innerHTML = "";
+      const vSlot = el("div", "verdict-slot");
+      const wCard = wireCard();
+      result.append(vSlot, dnsCard(domain, out, dns), wCard);
+      renderVerdict(vSlot, domain, dns, { state: "pending" });
+      connectionChecks(domain, dns, vSlot, wCard);
     } catch (e) {
       result.innerHTML = "";
       result.append(

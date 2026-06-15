@@ -316,6 +316,19 @@ pre code { background: none; padding: 0; }
 .verdict-card.err  .v-title { color: var(--bad); }
 .verdict-card .v-sub { color: var(--fg-dim); font-size: 13.5px; }
 
+/* check result: two labeled evidence cards under the single verdict */
+.verdict-slot .verdict-card { margin-bottom: 12px; }
+.evidence {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; background: var(--bg-inset); margin-bottom: 12px;
+}
+.ev-head {
+  font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--fg-dim); margin-bottom: 8px;
+}
+.ev-dim { text-transform: none; letter-spacing: 0; color: var(--fg-faint); }
+.ev-empty { color: var(--fg-dim); font-size: 13.5px; }
+
 .facts { list-style: none; padding: 0; margin: 0; font-size: 13.5px; }
 .facts li { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .facts li:last-child { border-bottom: 0; }
