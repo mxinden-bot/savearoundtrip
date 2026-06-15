@@ -355,20 +355,31 @@ function updateUrl(domain) {
   } catch {}
 }
 
+// A truthful one-line verdict for the share text, from the DNS result.
+function shareSummary(domain, out) {
+  if (!out.records.length)
+    return `${domain} publishes no HTTPS DNS record, so browsers can't use HTTP/3 on the first connection.`;
+  if (out.records.every((r) => r.priority === 0))
+    return `${domain}'s HTTPS DNS record is an alias (AliasMode).`;
+  if (out.records.some((r) => (r.params.alpn || []).includes("h3")))
+    return `${domain} advertises HTTP/3 in its HTTPS DNS record, so browsers can use HTTP/3 on the first connection.`;
+  return `${domain} has an HTTPS DNS record but doesn't advertise HTTP/3 (h3) in it.`;
+}
+
 // Mastodon has no central share endpoint (it's federated), so ask for the
 // user's instance, remember it, and open that instance's /share composer.
-function shareToMastodon(domain) {
+function shareToMastodon(domain, summary) {
   let inst = "";
   try { inst = localStorage.getItem("masto-instance") || ""; } catch {}
   inst = (window.prompt("Your Mastodon instance:", inst || "mastodon.social") || "").trim();
   if (!inst) return;
   inst = inst.replace(/^https?:\/\//, "").replace(/\/+$/, "");
   try { localStorage.setItem("masto-instance", inst); } catch {}
-  const text = `Can browsers reach HTTP/3 on the first connection to ${domain}? ${shareUrl(domain)}`;
+  const text = `${summary} ${shareUrl(domain)}`;
   window.open(`https://${inst}/share?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
 }
 
-function shareRow(domain) {
+function shareRow(domain, summary) {
   const row = el("div", "share-row");
   row.append(el("span", "share-label", "Share this result:"));
 
@@ -386,7 +397,7 @@ function shareRow(domain) {
 
   const masto = el("button", "share-btn", "share on Mastodon");
   masto.type = "button";
-  masto.addEventListener("click", () => shareToMastodon(domain));
+  masto.addEventListener("click", () => shareToMastodon(domain, summary));
 
   row.append(copy, masto);
   return row;
@@ -428,7 +439,7 @@ function init() {
       render(domain, out, result);
       const rrHasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
       connectionChecks(domain, result, rrHasH3);
-      result.append(shareRow(domain));
+      result.append(shareRow(domain, shareSummary(domain, out)));
     } catch (e) {
       result.innerHTML = "";
       result.append(
