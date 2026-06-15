@@ -300,6 +300,16 @@ pre code { background: none; padding: 0; }
 .examples a { color: var(--fg-dim); border: 0; margin-right: 12px; }
 .examples a:hover { color: var(--accent); }
 
+/* share buttons under a check result */
+.share-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; }
+.share-label { font-size: 12.5px; color: var(--fg-dim); }
+.share-btn {
+  font-family: var(--mono); font-size: 12px; background: var(--bg-soft);
+  border: 1px solid var(--line); color: var(--fg-dim); border-radius: 6px;
+  padding: 5px 11px; cursor: pointer;
+}
+.share-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 /* ---- lookup result ---- */
 #result { margin-top: 20px; }
 #result:empty { display: none; }

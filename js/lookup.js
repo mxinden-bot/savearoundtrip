@@ -336,6 +336,73 @@ async function connectionChecks(domain, target, rrHasH3) {
   pending.replaceWith(v);
 }
 
+/* ---- sharing ---- */
+
+// Shareable permalink for a domain's result: ?d=<domain>#check
+function shareUrl(domain) {
+  const u = new URL(location.href);
+  u.searchParams.set("d", domain);
+  u.hash = "check";
+  return u.href;
+}
+
+// Put the looked-up domain in the address bar so the page itself is shareable.
+function updateUrl(domain) {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set("d", domain);
+    history.replaceState(null, "", u);
+  } catch {}
+}
+
+// A truthful one-line verdict for the share text, from the DNS result.
+function shareSummary(domain, out) {
+  if (!out.records.length)
+    return `${domain} publishes no HTTPS DNS record, so browsers can't use HTTP/3 on the first connection.`;
+  if (out.records.every((r) => r.priority === 0))
+    return `${domain}'s HTTPS DNS record is an alias (AliasMode).`;
+  if (out.records.some((r) => (r.params.alpn || []).includes("h3")))
+    return `${domain} advertises HTTP/3 in its HTTPS DNS record, so browsers can use HTTP/3 on the first connection.`;
+  return `${domain} has an HTTPS DNS record but doesn't advertise HTTP/3 (h3) in it.`;
+}
+
+// Mastodon has no central share endpoint (it's federated), so ask for the
+// user's instance, remember it, and open that instance's /share composer.
+function shareToMastodon(domain, summary) {
+  let inst = "";
+  try { inst = localStorage.getItem("masto-instance") || ""; } catch {}
+  inst = (window.prompt("Your Mastodon instance:", inst || "mastodon.social") || "").trim();
+  if (!inst) return;
+  inst = inst.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  try { localStorage.setItem("masto-instance", inst); } catch {}
+  const text = `${summary} ${shareUrl(domain)}`;
+  window.open(`https://${inst}/share?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+}
+
+function shareRow(domain, summary) {
+  const row = el("div", "share-row");
+  row.append(el("span", "share-label", "Share this result:"));
+
+  const copy = el("button", "share-btn", "copy link");
+  copy.type = "button";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl(domain));
+      copy.textContent = "copied ✓";
+    } catch {
+      copy.textContent = "copy failed";
+    }
+    setTimeout(() => (copy.textContent = "copy link"), 1500);
+  });
+
+  const masto = el("button", "share-btn", "share on Mastodon");
+  masto.type = "button";
+  masto.addEventListener("click", () => shareToMastodon(domain, summary));
+
+  row.append(copy, masto);
+  return row;
+}
+
 /* ---- wire-up ---- */
 
 function init() {
@@ -363,6 +430,7 @@ function init() {
       return;
     }
 
+    updateUrl(domain);
     btn.disabled = true;
     result.setAttribute("aria-busy", "true");
     result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
@@ -371,6 +439,7 @@ function init() {
       render(domain, out, result);
       const rrHasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
       connectionChecks(domain, result, rrHasH3);
+      result.append(shareRow(domain, shareSummary(domain, out)));
     } catch (e) {
       result.innerHTML = "";
       result.append(
@@ -394,9 +463,14 @@ function init() {
     })
   );
 
-  // deep-link: #lookup=example.com
-  const m = location.hash.match(/lookup=([^&]+)/);
-  if (m) run(decodeURIComponent(m[1]));
+  // shareable link: ?d=example.com (legacy: #lookup=example.com)
+  const shared = new URL(location.href).searchParams.get("d");
+  const legacy = location.hash.match(/lookup=([^&]+)/);
+  const initial = shared || (legacy && decodeURIComponent(legacy[1]));
+  if (initial) {
+    run(initial);
+    document.getElementById("check")?.scrollIntoView({ behavior: "smooth" });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
