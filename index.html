@@ -287,20 +287,6 @@ sequenceDiagram
     </p>
 
     <p class="chart-cap" id="data-src"></p>
-
-    <details class="method">
-      <summary>How these numbers relate to GLAM</summary>
-      <p>
-        Open the GLAM links and you won't see these exact percentages. GLAM's
-        page defaults to a <b>per-client</b> proportion aggregated <b>per Firefox
-        release</b>. These figures are <b>per-connection</b> instead:
-        reconstructed from GLAM's non-normalized histogram (each bucket value
-        times the clients reporting it), taken as each bucket's share of the four
-        discovery outcomes, and averaged over the most recent Nightly builds so
-        one heavy build can't skew them. To reconcile in GLAM, switch it to the
-        non-normalized histogram and read it per build ID.
-      </p>
-    </details>
   </section>
 
   <!-- PUBLISH -->
@@ -338,7 +324,8 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     <p class="chart-cap">
       Source: Firefox Nightly, via
       <a href="https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features/explore">GLAM</a>.
-      Per-connection estimate reconstructed from GLAM's histograms, so approximate.
+      Per-connection estimate from GLAM's histograms; GLAM's page defaults to
+      per-client, so its numbers differ.
     </p>
   </section>
 

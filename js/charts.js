@@ -189,7 +189,7 @@ async function loadGlam() {
   if (metricSrc) {
     metricSrc.innerHTML =
       `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Approximate per-connection estimate, averaged over recent builds.`;
+      `Per-connection estimate, averaged over recent builds; GLAM's page defaults to per-client, so its numbers differ.`;
   }
 
   const share = d.h3_discovery.share;
@@ -226,7 +226,7 @@ async function loadGlam() {
     src.innerHTML =
       `Source: Firefox Nightly, via ` +
       `<a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Per-connection estimate reconstructed from GLAM's histograms and averaged over recent builds, so approximate.`;
+      `Per-connection estimate from GLAM's histograms, averaged over recent builds; GLAM's page defaults to per-client, so its numbers differ.`;
   }
 }
 
