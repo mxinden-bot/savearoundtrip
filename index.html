@@ -358,14 +358,14 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
     <h3>Which browsers use the HTTPS record, and do they need DoH?</h3>
     <p>
-      All the major engines support it, on by default, and none require
-      DNS-over-HTTPS to read the record:
+      All the major engines support it, on by default, and read the record
+      whether or not the visitor has DNS-over-HTTPS enabled:
       <a href="https://mailarchive.ietf.org/arch/msg/dnsop/ldaCto09yaOuSXM92HgJhGqmPJw/">Safari</a>
-      reads it through the operating-system resolver,
+      uses the operating-system resolver,
       <a href="https://chromestatus.com/feature/5154357283651584">Chrome</a>
-      through its own built-in resolver (over DoH or plain DNS), and
+      its own built-in resolver (over DoH or plain DNS), and
       <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1721132">Firefox</a>
-      over either.
+      either.
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
