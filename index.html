@@ -287,6 +287,20 @@ sequenceDiagram
     </p>
 
     <p class="chart-cap" id="data-src"></p>
+
+    <details class="method">
+      <summary>How these numbers relate to GLAM</summary>
+      <p>
+        Open the GLAM links and you won't see these exact percentages. GLAM's
+        page defaults to a <b>per-client</b> proportion aggregated <b>per Firefox
+        release</b>. These figures are <b>per-connection</b> instead:
+        reconstructed from GLAM's non-normalized histogram (each bucket value
+        times the clients reporting it), taken as each bucket's share of the four
+        discovery outcomes, and averaged over the most recent Nightly builds so
+        one heavy build can't skew them. To reconcile in GLAM, switch it to the
+        non-normalized histogram and read it per build ID.
+      </p>
+    </details>
   </section>
 
   <!-- PUBLISH -->
