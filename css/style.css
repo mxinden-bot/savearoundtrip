@@ -146,6 +146,16 @@ ul.tick li::before {
 
 /* ---- the round-trip sequence diagrams (mermaid) ---- */
 .seq { display: grid; gap: 18px; margin: 20px 0; }
+/* Stacked on mobile. Side by side once there's room, with the diagrams filling
+   their column (Mermaid caps them small otherwise). On wide screens the pair
+   breaks out past the 860px text column to use the monitor. */
+@media (min-width: 760px) {
+  .seq { grid-template-columns: 1fr 1fr; align-items: start; }
+  .seqcol .mermaid svg { width: 100%; max-width: 100% !important; height: auto; }
+}
+@media (min-width: 1100px) {
+  .seq { position: relative; left: 50%; transform: translateX(-50%); width: min(94vw, 1500px); }
+}
 .seqcol {
   border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
   padding: 16px 18px; background: var(--bg-inset); min-width: 0;

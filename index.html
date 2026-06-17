@@ -127,6 +127,14 @@
       and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
       speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
     </p>
+    <p>
+      An <b>HTTPS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
+      carries the same "I speak HTTP/3" signal, but in the DNS. The client
+      reads it during the name resolution it was going to do anyway,
+      <i>before</i> it opens any connection. So it can make its very first
+      connection over QUIC/HTTP/3, with no earlier HTTP/1 or HTTP/2 connection
+      spent just to find out.
+    </p>
 
     <div class="seq">
       <div class="seqcol bad">
@@ -152,14 +160,6 @@ sequenceDiagram
         </pre>
         <div class="verdict">HTTP/3 only on the second connection.</div>
       </div>
-      <p>
-        An <b>HTTPS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
-        carries the same "I speak HTTP/3" signal, but in the DNS. The client
-        reads it during the name resolution it was going to do anyway,
-        <i>before</i> it opens any connection. So it can make its very first
-        connection over QUIC/HTTP/3, with no earlier HTTP/1 or HTTP/2 connection
-        spent just to find out.
-      </p>
       <div class="seqcol good">
         <h4>HTTP/3 advertised in an HTTPS DNS record</h4>
         <pre class="mermaid">
