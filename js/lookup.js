@@ -306,19 +306,19 @@ async function connectionChecks(domain, target, rrHasH3) {
   let kind = "", title = "", sub = "", extra = null;
   if (speaks && rrHasH3) {
     kind = "ok";
-    title = "Speaks HTTP/3, and advertises it in DNS ✓";
-    sub = "Optimal: clients can use HTTP/3 on the very first connection.";
+    title = "Speaks HTTP/3 ✓";
+    sub = "Confirmed with a live HTTP/3 handshake. The HTTPS record above advertises h3 too, so clients reach HTTP/3 on the very first connection.";
   } else if (speaks && !rrHasH3) {
     kind = "warn";
-    title = "Speaks HTTP/3, but not advertised in DNS";
+    title = "Speaks HTTP/3, but it isn't in the HTTPS record";
     sub =
-      "This is the gap: the server completes an HTTP/3 handshake" +
+      "The server completes an HTTP/3 handshake" +
       (d.advertises_h3 ? " and sends <code>Alt-Svc: h3</code>" : "") +
-      ", but publishes no h3 HTTPS record, so the first connection can't use HTTP/3. Publish one:";
+      ", but the HTTPS record above doesn't advertise h3, so the first connection can't use HTTP/3. Publish one:";
     extra = publishHint(domain);
   } else if (d.advertises_h3) {
     kind = "warn";
-    title = "Advertises h3, but no handshake from our checker";
+    title = "Advertises h3 via Alt-Svc, but no handshake from our checker";
     sub = "The <code>Alt-Svc</code> header lists h3, but a live HTTP/3 handshake didn't complete from our checker (it may be geo/rate-limited or briefly down).";
   } else {
     title = "No HTTP/3 detected";
