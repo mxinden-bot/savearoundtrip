@@ -331,6 +331,8 @@ async function connectionChecks(domain, target, rrHasH3) {
   const row = (k, val) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${val}</span>`));
   row("Alt-Svc h3", yn(d.advertises_h3));
   row("HTTP/3 handshake", yn(d.h3_handshake_ok));
+  if (d.quic_versions && d.quic_versions.length)
+    row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
   if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
   v.append(facts);
   pending.replaceWith(v);
