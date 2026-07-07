@@ -2,17 +2,17 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-07-06T11:05:10.219Z",
+  "fetched_at": "2026-07-07T10:01:38.264Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
     "share": {
-      "none": 58.2,
-      "altsvc_only": 35,
-      "both": 3.8,
-      "https_rr_only": 2.9
+      "none": 0,
+      "altsvc_only": 0,
+      "both": 0,
+      "https_rr_only": 0
     },
-    "altsvc_only_of_h3_capable": 83.9,
+    "altsvc_only_of_h3_capable": 0,
     "series": [
       {
         "build_id": "2026060209",
@@ -661,6 +661,166 @@
         "altsvc_only": 45.9,
         "both": 0.3,
         "https_rr_only": 0.6
+      },
+      {
+        "build_id": "2026062509",
+        "date": "2026-06-25",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062604",
+        "date": "2026-06-26",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062606",
+        "date": "2026-06-26",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062708",
+        "date": "2026-06-27",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062720",
+        "date": "2026-06-27",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062808",
+        "date": "2026-06-28",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062821",
+        "date": "2026-06-28",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062909",
+        "date": "2026-06-29",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026062921",
+        "date": "2026-06-29",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026063009",
+        "date": "2026-06-30",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026063021",
+        "date": "2026-06-30",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070109",
+        "date": "2026-07-01",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070119",
+        "date": "2026-07-01",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070209",
+        "date": "2026-07-02",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070221",
+        "date": "2026-07-02",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070309",
+        "date": "2026-07-03",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070321",
+        "date": "2026-07-03",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070421",
+        "date": "2026-07-04",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070520",
+        "date": "2026-07-05",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070609",
+        "date": "2026-07-06",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
       }
     ]
   },
