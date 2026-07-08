@@ -2,7 +2,7 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-07-07T10:01:38.264Z",
+  "fetched_at": "2026-07-08T08:45:04.901Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -783,6 +783,14 @@
         "https_rr_only": 0
       },
       {
+        "build_id": "2026070222",
+        "date": "2026-07-02",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
         "build_id": "2026070309",
         "date": "2026-07-03",
         "none": 0,
@@ -817,6 +825,22 @@
       {
         "build_id": "2026070609",
         "date": "2026-07-06",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070621",
+        "date": "2026-07-06",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026070709",
+        "date": "2026-07-07",
         "none": 0,
         "altsvc_only": 0,
         "both": 0,
