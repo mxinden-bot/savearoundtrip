@@ -219,6 +219,29 @@ async function loadGlam() {
     ]);
   }
 
+  const br = d.https_rr_features.by_resolver;
+  const mixEl = document.getElementById("resolver-mix");
+  if (mixEl && br) {
+    mixEl.innerHTML =
+      `Of the records Firefox saw, <b>${br.mix.doh}%</b> came via DoH and ` +
+      `<b>${br.mix.native}%</b> via the native resolver. Share of each carrying:`;
+  }
+  const featRes = document.getElementById("chart-feat-resolver");
+  if (featRes && br) {
+    const rows = [
+      ["h3 in ALPN", "h3_alpn"],
+      ["IPv4 hint", "ipv4hint"],
+      ["IPv6 hint", "ipv6hint"],
+      ["ECH", "ech"],
+    ];
+    featRes.innerHTML =
+      `<table class="cmp"><thead><tr><th>feature</th><th>DoH</th><th>native</th></tr></thead><tbody>` +
+      rows
+        .map(([label, k]) => `<tr><td>${label}</td><td>${br.doh[k]}%</td><td>${br.native[k]}%</td></tr>`)
+        .join("") +
+      `</tbody></table>`;
+  }
+
   const src = document.getElementById("data-src");
   if (src) {
     src.innerHTML =

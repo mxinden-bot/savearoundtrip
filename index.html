@@ -323,8 +323,16 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     <div id="chart-feat" class="bars"></div>
     <p class="chart-cap">
       Source: Firefox Nightly, via
-      <a href="https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features/explore">GLAM</a>.
+      <a href="https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore">GLAM</a>.
       Per-connection estimate reconstructed from GLAM's histograms, so approximate.
+    </p>
+
+    <h3>By resolver: DoH vs native</h3>
+    <p class="dim" id="resolver-mix"></p>
+    <div id="chart-feat-resolver"></div>
+    <p class="chart-cap">
+      Firefox now reports these split by the resolver that produced the record.
+      Both paths carry the same features; a published record reaches either.
     </p>
   </section>
 
