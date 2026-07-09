@@ -2,17 +2,17 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-07-09T10:03:07.317Z",
+  "fetched_at": "2026-07-09T12:08:05.850Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
     "share": {
-      "none": 0,
-      "altsvc_only": 0,
-      "both": 0,
-      "https_rr_only": 0
+      "none": 58.2,
+      "altsvc_only": 35,
+      "both": 3.8,
+      "https_rr_only": 2.9
     },
-    "altsvc_only_of_h3_capable": 0,
+    "altsvc_only_of_h3_capable": 83.9,
     "series": [
       {
         "build_id": "2026060209",
@@ -874,12 +874,30 @@
   },
   "https_rr_features": {
     "version": 154,
-    "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features/explore?activeBuckets=%5B%22total%22%2C%22h3_alpn%22%2C%22ipv6hint%22%2C%22ipv4hint%22%2C%22ech%22%5D",
+    "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
-      "h3_alpn": 79.5,
-      "ech": 16.3,
-      "ipv4hint": 54.4,
-      "ipv6hint": 51.2
+      "h3_alpn": 98.3,
+      "ech": 70,
+      "ipv4hint": 95.8,
+      "ipv6hint": 96
+    },
+    "by_resolver": {
+      "doh": {
+        "h3_alpn": 98.9,
+        "ech": 74.7,
+        "ipv4hint": 96.8,
+        "ipv6hint": 96.8
+      },
+      "native": {
+        "h3_alpn": 98.5,
+        "ech": 81.2,
+        "ipv4hint": 93.9,
+        "ipv6hint": 92.1
+      },
+      "mix": {
+        "doh": 57.6,
+        "native": 42.4
+      }
     }
   }
 }
