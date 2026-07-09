@@ -1,8 +1,10 @@
 /* Renders the real-browser numbers from data/glam.json (refreshed on CI from
  * GLAM; see scripts/fetch-glam.mjs). Same-origin static file, so no CORS.
  *
- * Shares are GLAM's "By Client ID" proportion: sample_count[bucket] divided by
- * the sum over buckets, per build. That matches what the GLAM UI shows. */
+ * Shares are per-connection: each bucket's share of the four discovery outcomes,
+ * from GLAM's non-normalized histogram, averaged over recent builds. GLAM's UI
+ * defaults to a per-client, per-release view, so it won't show these exact
+ * numbers (see the "How these numbers relate to GLAM" note on the page). */
 
 // bucket key -> [friendly label, color class]
 const BUCKETS = {
@@ -187,7 +189,7 @@ async function loadGlam() {
   if (metricSrc) {
     metricSrc.innerHTML =
       `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Approximate per-connection estimate, averaged over recent builds.`;
+      `Per-connection estimate, averaged over recent builds; GLAM's page defaults to per-client, so its numbers differ.`;
   }
 
   const share = d.h3_discovery.share;
@@ -224,7 +226,7 @@ async function loadGlam() {
     src.innerHTML =
       `Source: Firefox Nightly, via ` +
       `<a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Per-connection estimate reconstructed from GLAM's histograms and averaged over recent builds, so approximate.`;
+      `Per-connection estimate from GLAM's histograms, averaged over recent builds; GLAM's page defaults to per-client, so its numbers differ.`;
   }
 }
 
