@@ -2,7 +2,7 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-07-14T08:29:01.754Z",
+  "fetched_at": "2026-07-15T08:36:31.544Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -903,6 +903,14 @@
         "https_rr_only": 0
       },
       {
+        "build_id": "2026071006",
+        "date": "2026-07-10",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
         "build_id": "2026071009",
         "date": "2026-07-10",
         "none": 0,
@@ -933,6 +941,22 @@
         "altsvc_only": 0,
         "both": 0,
         "https_rr_only": 0
+      },
+      {
+        "build_id": "2026071320",
+        "date": "2026-07-13",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026071409",
+        "date": "2026-07-14",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
       }
     ]
   },
@@ -940,27 +964,27 @@
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
-      "h3_alpn": 95.7,
-      "ech": 65.4,
-      "ipv4hint": 84.4,
-      "ipv6hint": 83.1
+      "h3_alpn": 97.3,
+      "ech": 64.2,
+      "ipv4hint": 86.6,
+      "ipv6hint": 85.2
     },
     "by_resolver": {
       "doh": {
-        "h3_alpn": 81.7,
-        "ech": 61.5,
-        "ipv4hint": 76.7,
-        "ipv6hint": 76.7
+        "h3_alpn": 83.7,
+        "ech": 60.4,
+        "ipv4hint": 78.9,
+        "ipv6hint": 78.9
       },
       "native": {
         "h3_alpn": 98,
-        "ech": 69,
-        "ipv4hint": 82.2,
-        "ipv6hint": 79.9
+        "ech": 67.5,
+        "ipv4hint": 82.8,
+        "ipv6hint": 80.4
       },
       "mix": {
-        "doh": 50.7,
-        "native": 49.3
+        "doh": 50.2,
+        "native": 49.8
       }
     }
   }
