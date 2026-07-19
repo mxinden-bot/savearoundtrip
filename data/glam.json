@@ -2,7 +2,7 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-07-18T08:10:16.054Z",
+  "fetched_at": "2026-07-19T08:34:07.016Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -1013,6 +1013,22 @@
         "altsvc_only": 0,
         "both": 0,
         "https_rr_only": 0
+      },
+      {
+        "build_id": "2026071716",
+        "date": "2026-07-17",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
+      },
+      {
+        "build_id": "2026071809",
+        "date": "2026-07-18",
+        "none": 0,
+        "altsvc_only": 0,
+        "both": 0,
+        "https_rr_only": 0
       }
     ]
   },
@@ -1020,27 +1036,27 @@
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
-      "h3_alpn": 97.2,
-      "ech": 56,
-      "ipv4hint": 78.9,
-      "ipv6hint": 77.3
+      "h3_alpn": 100.3,
+      "ech": 55.7,
+      "ipv4hint": 88.5,
+      "ipv6hint": 85.9
     },
     "by_resolver": {
       "doh": {
-        "h3_alpn": 76.9,
-        "ech": 51.7,
-        "ipv4hint": 68.8,
-        "ipv6hint": 68.8
+        "h3_alpn": 77.7,
+        "ech": 51.4,
+        "ipv4hint": 68.4,
+        "ipv6hint": 68.4
       },
       "native": {
-        "h3_alpn": 97.5,
-        "ech": 58.7,
-        "ipv4hint": 78.4,
-        "ipv6hint": 75.6
+        "h3_alpn": 101,
+        "ech": 58.8,
+        "ipv4hint": 94.8,
+        "ipv6hint": 90.3
       },
       "mix": {
-        "doh": 45.5,
-        "native": 54.5
+        "doh": 47.9,
+        "native": 52.1
       }
     }
   }
