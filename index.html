@@ -301,7 +301,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <li><code>3600</code> the TTL: how many seconds a resolver may cache the record.</li>
       <li><code>IN</code> the DNS class (Internet), as on every web record.</li>
       <li><code>HTTPS</code> the record type (RFC 9460).</li>
-      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode (this record carries the parameters); <code>0</code> is AliasMode, which just points at another target.</li>
+      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode (this record carries the parameters); <code>0</code> is AliasMode, which just points at another target the client then resolves (the <a href="#check">checker</a> follows that, like a browser does).</li>
       <li><code>.</code> the target host. <code>.</code> means the owner name itself, here <code>example.com</code>.</li>
       <li><code>alpn="h3,h2"</code> the protocols the server speaks, best first: <code>h3</code> is HTTP/3, <code>h2</code> is HTTP/2.</li>
       <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the client can start connecting to right away, alongside its A/AAAA lookups.</li>
