@@ -8,6 +8,14 @@
 const DOH = "https://cloudflare-dns.com/dns-query";
 const TYPE_HTTPS = 65;
 
+// RFC 9460 requires a cap on the number of AliasMode records followed per
+// resolution (2.4.2: "MUST impose a limit ... MUST NOT be zero"). Firefox uses
+// 8 (bug 1869075 / D312868); we mirror that.
+const MAX_ALIAS_HOPS = 8;
+
+// Domain names are case-insensitive; normalize for display and loop detection.
+const normName = (n) => String(n).toLowerCase().replace(/\.$/, "");
+
 // Backend that checks Alt-Svc (advertised h3) and a real HTTP/3 handshake,
 // since a browser can do neither. See check-service/. If unreachable, the
 // page still works (DNS-only).
@@ -150,6 +158,39 @@ async function lookup(domain) {
   return { status: json.Status, records, raw: answers };
 }
 
+// Follow AliasMode (priority-0) HTTPS records to their TargetName, per RFC 9460
+// 2.5.1, the way a browser does (Firefox bug 1869075). Chases up to
+// MAX_ALIAS_HOPS aliases and stops at the first ServiceMode record, an empty
+// answer, a "." target (service not available, 2.5.1), or a loop.
+//
+// Returns { hops:[{name,target}], finalName, out, status } where status is one
+// of: "resolved" (out holds the terminal ServiceMode/empty answer),
+// "unavailable" ("." target), "loop", or "toodeep".
+async function resolveChain(domain) {
+  const hops = [];
+  const seen = new Set([normName(domain)]);
+  let name = domain;
+  let out = await lookup(name);
+
+  for (let i = 0; i < MAX_ALIAS_HOPS; i++) {
+    // 2.4.1: an AliasMode record in the set makes ServiceMode records moot.
+    const alias = out.records.find((r) => r.priority === 0);
+    if (!alias) return { hops, finalName: name, out, status: "resolved" };
+
+    hops.push({ name, target: alias.target });
+    if (alias.target === ".") return { hops, finalName: name, out, status: "unavailable" };
+
+    const target = normName(alias.target);
+    // 2.4.2: TargetName SHOULD NOT equal the owner name; a repeat is a loop.
+    if (!target || seen.has(target)) return { hops, finalName: name, out, status: "loop" };
+
+    seen.add(target);
+    name = target;
+    out = await lookup(name);
+  }
+  return { hops, finalName: name, out, status: "toodeep" };
+}
+
 /* ---- rendering ---- */
 
 function el(tag, cls, html) {
@@ -199,65 +240,28 @@ function publishHint(domain) {
   return wrap;
 }
 
-function render(domain, out, target) {
-  target.innerHTML = "";
+// The chain of names we walked, shown as "example.com -> svc.example.net".
+function aliasTrace(domain, hops) {
+  const names = [normName(domain)];
+  for (const h of hops) names.push(h.target === "." ? "(unavailable)" : normName(h.target));
+  const wrap = el("div", "alias-trace");
+  wrap.innerHTML =
+    `<span class="at-label">Alias chain</span>` +
+    names.map((n) => `<code>${escapeHtml(n)}</code>`).join(`<span class="at-arrow">&rarr;</span>`);
+  return wrap;
+}
 
-  if (!out.records.length) {
-    target.append(
-      verdict(
-        "warn",
-        "No HTTPS record published",
-        `<code>${domain}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
-          `can only discover that <i>after</i> a first connection (e.g. via an ` +
-          `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
-          `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`,
-        publishHint(domain)
-      )
-    );
-    return;
-  }
-
-  const aliasOnly = out.records.every((r) => r.priority === 0);
-  const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
-
-  if (aliasOnly) {
-    target.append(
-      verdict(
-        "warn",
-        "HTTPS record is an alias (AliasMode)",
-        `This is a priority-0 AliasMode record pointing at ` +
-          `<code>${out.records[0].target}</code>. The h3 / ECH / hint parameters ` +
-          `live on the HTTPS record at that target, not here.`
-      )
-    );
-  } else if (hasH3) {
-    target.append(
-      verdict(
-        "ok",
-        "HTTPS record found: advertises h3 ✓",
-        `Browsers can negotiate HTTP/3 on the <b>first</b> connection. ` +
-          `No round trip wasted.`
-      )
-    );
-  } else {
-    target.append(
-      verdict(
-        "warn",
-        "HTTPS record found, but no h3 in ALPN",
-        `The record exists but doesn't list <code>h3</code>, so clients won't ` +
-          `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`,
-        publishHint(domain)
-      )
-    );
-  }
-
-  out.records.forEach((r, i) => {
+// Render the fact cards for one name's records, labelling which name they came
+// from when we followed an alias to get here.
+function renderRecordCards(records, ownerName, whereLabel, target) {
+  records.forEach((r, i) => {
     const p = r.params;
     const facts = el("ul", "facts");
     const row = (k, v) =>
       facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${v}</span>`));
 
-    if (out.records.length > 1) row("record", `#${i + 1}`);
+    if (whereLabel) row("at", `<code>${escapeHtml(ownerName)}</code>`);
+    if (records.length > 1) row("record", `#${i + 1}`);
     row("mode", r.priority === 0 ? "0 (AliasMode)" : `${r.priority} (ServiceMode)`);
     row("target", `<code>${r.target}</code>${r.target === "." ? " <span class=\"dim\">(same as owner)</span>" : ""}`);
     if (p.alpn) row("alpn", pills(p.alpn, (x) => x === "h3"));
@@ -272,6 +276,107 @@ function render(domain, out, target) {
     card.append(facts);
     target.append(card);
   });
+}
+
+function render(domain, chain, target) {
+  target.innerHTML = "";
+  const { hops, finalName, out, status } = chain;
+  const followed = hops.length > 0;
+  if (followed) target.append(aliasTrace(domain, hops));
+
+  if (status === "loop") {
+    target.append(
+      verdict(
+        "err",
+        "HTTPS alias loops",
+        `The AliasMode chain from <code>${escapeHtml(domain)}</code> points back to a ` +
+          `name it already visited, so it never resolves to a service. RFC 9460 says the ` +
+          `alias target must not loop; a browser stops here.`
+      )
+    );
+    return;
+  }
+
+  if (status === "toodeep") {
+    target.append(
+      verdict(
+        "err",
+        "HTTPS alias chain too long",
+        `Followed ${MAX_ALIAS_HOPS} AliasMode records without reaching a service. ` +
+          `Browsers cap the chain (Firefox at ${MAX_ALIAS_HOPS}) and give up, so this ` +
+          `record is effectively unusable.`
+      )
+    );
+    return;
+  }
+
+  if (status === "unavailable") {
+    target.append(
+      verdict(
+        "warn",
+        "Alias says the service is not available",
+        `<code>${escapeHtml(finalName)}</code> has an AliasMode record with target ` +
+          `<code>.</code> (root), which RFC 9460 uses to signal that the service does ` +
+          `not exist here. Clients may ignore it and connect normally.`
+      )
+    );
+    return;
+  }
+
+  // status === "resolved": `out` holds the terminal name's records.
+  const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
+
+  if (!out.records.length) {
+    if (followed) {
+      target.append(
+        verdict(
+          "warn",
+          "Alias target has no HTTPS record",
+          `<code>${escapeHtml(domain)}</code> aliases to <code>${escapeHtml(finalName)}</code>, ` +
+            `but that name publishes no HTTPS record, so there's no h3 to discover from DNS. ` +
+            `Browsers fall back to its A/AAAA addresses. Publish an HTTPS record at the target:`,
+          publishHint(finalName)
+        )
+      );
+    } else {
+      target.append(
+        verdict(
+          "warn",
+          "No HTTPS record published",
+          `<code>${escapeHtml(domain)}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
+            `can only discover that <i>after</i> a first connection (e.g. via an ` +
+            `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
+            `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`,
+          publishHint(domain)
+        )
+      );
+    }
+    return;
+  }
+
+  const where = followed ? ` (via alias to <code>${escapeHtml(finalName)}</code>)` : "";
+  if (hasH3) {
+    target.append(
+      verdict(
+        "ok",
+        "HTTPS record found: advertises h3 &#10003;",
+        `Browsers can negotiate HTTP/3 on the <b>first</b> connection${where}. ` +
+          `No round trip wasted.`
+      )
+    );
+  } else {
+    target.append(
+      verdict(
+        "warn",
+        "HTTPS record found, but no h3 in ALPN",
+        `The record${where} doesn't list <code>h3</code>, so clients won't ` +
+          `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`,
+        publishHint(finalName)
+      )
+    );
+  }
+
+  renderRecordCards(out.records, finalName, followed, target);
 }
 
 function verdict(kind, title, sub, extra) {
@@ -357,15 +462,18 @@ function updateUrl(domain) {
   } catch {}
 }
 
-// A truthful one-line verdict for the share text, from the DNS result.
-function shareSummary(domain, out) {
+// A truthful one-line verdict for the share text, from the resolved chain.
+function shareSummary(domain, chain) {
+  const { hops, finalName, out, status } = chain;
+  const via = hops.length ? ` (via alias to ${finalName})` : "";
+  if (status === "loop") return `${domain}'s HTTPS DNS record aliases in a loop and never resolves.`;
+  if (status === "toodeep") return `${domain}'s HTTPS DNS record aliases too many times to resolve.`;
+  if (status === "unavailable") return `${domain}'s HTTPS DNS record signals the service is not available.`;
   if (!out.records.length)
-    return `${domain} publishes no HTTPS DNS record, so browsers can't use HTTP/3 on the first connection.`;
-  if (out.records.every((r) => r.priority === 0))
-    return `${domain}'s HTTPS DNS record is an alias (AliasMode).`;
+    return `${domain} publishes no usable HTTPS DNS record, so browsers can't use HTTP/3 on the first connection.`;
   if (out.records.some((r) => (r.params.alpn || []).includes("h3")))
-    return `${domain} advertises HTTP/3 in its HTTPS DNS record, so browsers can use HTTP/3 on the first connection.`;
-  return `${domain} has an HTTPS DNS record but doesn't advertise HTTP/3 (h3) in it.`;
+    return `${domain} advertises HTTP/3 in its HTTPS DNS record${via}, so browsers can use HTTP/3 on the first connection.`;
+  return `${domain} has an HTTPS DNS record${via} but doesn't advertise HTTP/3 (h3) in it.`;
 }
 
 // Mastodon has no central share endpoint (it's federated), so ask for the
@@ -437,11 +545,13 @@ function init() {
     result.setAttribute("aria-busy", "true");
     result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
     try {
-      const out = await lookup(domain);
-      render(domain, out, result);
-      const rrHasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
+      const chain = await resolveChain(domain);
+      render(domain, chain, result);
+      const rrHasH3 =
+        chain.status === "resolved" &&
+        chain.out.records.some((r) => (r.params.alpn || []).includes("h3"));
       connectionChecks(domain, result, rrHasH3);
-      result.append(shareRow(domain, shareSummary(domain, out)));
+      result.append(shareRow(domain, shareSummary(domain, chain)));
     } catch (e) {
       result.innerHTML = "";
       result.append(
