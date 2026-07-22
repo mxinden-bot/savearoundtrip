@@ -38,6 +38,13 @@ async function query(probe, aggregationLevel) {
 
 const round = (n) => Math.round(n * 10) / 10;
 
+// A carried-feature count is always <= the record total in Firefox (metrics.rs
+// bumps "total" once per record and each feature at most once). Our per-
+// connection counts are reconstructed independently per label from GLAM's
+// bucketed histograms, so two near-equal estimates can round to a ratio just
+// over 1. Clamp: a share of records can't exceed 100%.
+const pct = (num, den) => (den ? Math.min(100, round((100 * num) / den)) : 0);
+
 // Per-connection estimate: GLAM aggregates per client, so sample_count is
 // per-client reach (misleading here). Reconstruct an approximate event/
 // connection count from the non-normalized histogram: sum bucket_value x
@@ -80,9 +87,9 @@ function featSeries(rows) {
       const tot = dohT + natT;
       const o = {};
       for (const f of FEATURES) {
-        o[`all_${f}`] = tot ? round((100 * (g(`doh[${f}]`) + g(`native[${f}]`))) / tot) : 0;
-        o[`doh_${f}`] = dohT ? round((100 * g(`doh[${f}]`)) / dohT) : 0;
-        o[`native_${f}`] = natT ? round((100 * g(`native[${f}]`)) / natT) : 0;
+        o[`all_${f}`] = pct(g(`doh[${f}]`) + g(`native[${f}]`), tot);
+        o[`doh_${f}`] = pct(g(`doh[${f}]`), dohT);
+        o[`native_${f}`] = pct(g(`native[${f}]`), natT);
       }
       o.mix_doh = tot ? round((100 * dohT) / tot) : 0;
       o.mix_native = tot ? round((100 * natT) / tot) : 0;
