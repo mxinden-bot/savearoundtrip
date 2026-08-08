@@ -1,8 +1,11 @@
 /* savearoundtrip: live HTTPS-RR lookup via Cloudflare DNS-over-HTTPS.
  *
- * Cloudflare's DoH JSON endpoint returns type-65 (HTTPS) records as RFC 3597
- * "generic" RDATA, e.g.  "\# 61 00 01 00 00 01 00 06 02 68 33 ..."
- * so we decode the SVCB/HTTPS wire format (RFC 9460 §2.2) ourselves.
+ * Cloudflare's DoH JSON endpoint historically returned type-65 (HTTPS) records
+ * as RFC 3597 "generic" RDATA, e.g.  "\# 61 00 01 00 00 01 00 06 02 68 33 ...",
+ * which we decode from the SVCB/HTTPS wire format (RFC 9460 §2.2). From
+ * 2026-07-28 it is switching to standard presentation format, e.g.
+ * "1 . alpn=h3,h2 ipv4hint=192.0.2.1"; during the rollout either form may
+ * appear, so we parse both (see parseGeneric vs parsePresentation).
  */
 
 const DOH = "https://cloudflare-dns.com/dns-query";
@@ -142,6 +145,60 @@ function parseSvcb(buf) {
   return { priority, target, params };
 }
 
+// Cloudflare's DoH JSON is moving the `data` field from RFC 3597 generic hex to
+// standard RFC 9460 presentation format for HTTPS/SVCB records (rolling out from
+// 2026-07-28, either format possible mid-rollout). Parse that form too, into the
+// same { priority, target, params } shape parseSvcb produces.
+//   e.g.  1 . alpn="h3,h2" ipv4hint=192.0.2.1,192.0.2.2 ech=... no-default-alpn
+function parsePresentation(data) {
+  const s = data.trim();
+  if (!s || s.startsWith("\\#")) return null; // empty or generic form
+
+  // Split on whitespace, but keep quoted spans and honor "\" escapes intact.
+  const toks = [];
+  let cur = "", inQuote = false, started = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "\\" && i + 1 < s.length) { cur += s[++i]; started = true; continue; }
+    if (ch === '"') { inQuote = !inQuote; started = true; continue; }
+    if (/\s/.test(ch) && !inQuote) { if (started) { toks.push(cur); cur = ""; started = false; } continue; }
+    cur += ch; started = true;
+  }
+  if (started) toks.push(cur);
+
+  // Some encoders prefix the RR type ("HTTPS 1 . ..."); drop a leading non-numeric.
+  if (toks.length && Number.isNaN(parseInt(toks[0], 10))) toks.shift();
+  if (toks.length < 2) return null;
+
+  const priority = parseInt(toks[0], 10);
+  if (Number.isNaN(priority)) return null;
+  const target = toks[1];
+
+  const params = {};
+  const list = (v) => v.split(",").filter(Boolean);
+  for (let i = 2; i < toks.length; i++) {
+    const eq = toks[i].indexOf("=");
+    const key = eq < 0 ? toks[i] : toks[i].slice(0, eq);
+    const val = eq < 0 ? "" : toks[i].slice(eq + 1);
+    switch (key) {
+      case "alpn": params.alpn = list(val); break;
+      case "no-default-alpn": params["no-default-alpn"] = true; break;
+      case "port": params.port = parseInt(val, 10); break;
+      case "ipv4hint": params.ipv4hint = list(val); break;
+      case "ipv6hint": params.ipv6hint = list(val); break;
+      case "ech": params.ech = echBytes(val); break;
+      case "mandatory": params.mandatory = true; break;
+      default: params[key] = val.length || true;
+    }
+  }
+  return { priority, target, params };
+}
+
+// Byte length of a base64 ECHConfigList, to match parseSvcb's `ech = vlen`.
+function echBytes(b64) {
+  try { return atob(b64).length; } catch { return b64.length || true; }
+}
+
 /* ---- the lookup ---- */
 
 async function lookup(domain) {
@@ -153,7 +210,8 @@ async function lookup(domain) {
   const records = [];
   for (const a of answers) {
     const bytes = parseGeneric(a.data);
-    if (bytes) records.push({ ...parseSvcb(bytes), ttl: a.TTL });
+    const rec = bytes ? parseSvcb(bytes) : parsePresentation(a.data);
+    if (rec) records.push({ ...rec, ttl: a.TTL });
   }
   return { status: json.Status, records, raw: answers };
 }
