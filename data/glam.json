@@ -2,7 +2,7 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-08-07T07:42:51.699Z",
+  "fetched_at": "2026-08-08T07:16:44.502Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -1116,27 +1116,27 @@
     "version": 155,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
-      "h3_alpn": 97.3,
-      "ech": 62.5,
-      "ipv4hint": 93,
-      "ipv6hint": 92
+      "h3_alpn": 99.2,
+      "ech": 77.9,
+      "ipv4hint": 98.6,
+      "ipv6hint": 97.9
     },
     "by_resolver": {
       "doh": {
-        "h3_alpn": 91.3,
-        "ech": 72,
-        "ipv4hint": 85.1,
-        "ipv6hint": 84.5
+        "h3_alpn": 85.7,
+        "ech": 78.6,
+        "ipv4hint": 83.9,
+        "ipv6hint": 83.3
       },
       "native": {
-        "h3_alpn": 97.3,
-        "ech": 65.5,
-        "ipv4hint": 96.8,
-        "ipv6hint": 94.5
+        "h3_alpn": 99.2,
+        "ech": 82.1,
+        "ipv4hint": 100,
+        "ipv6hint": 99.9
       },
       "mix": {
-        "doh": 48.5,
-        "native": 51.5
+        "doh": 43.2,
+        "native": 56.8
       }
     }
   }
