@@ -2,7 +2,7 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-08-14T07:52:27.608Z",
+  "fetched_at": "2026-08-15T06:58:27.049Z",
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -409,9 +409,9 @@
       {
         "build_id": "2026061521",
         "date": "2026-06-15",
-        "none": 58.6,
+        "none": 58.4,
         "altsvc_only": 35.1,
-        "both": 4.2,
+        "both": 4.4,
         "https_rr_only": 2.1
       },
       {
@@ -425,23 +425,23 @@
       {
         "build_id": "2026061607",
         "date": "2026-06-16",
-        "none": 54.6,
-        "altsvc_only": 43.8,
-        "both": 0.9,
-        "https_rr_only": 0.8
+        "none": 23.4,
+        "altsvc_only": 74.1,
+        "both": 1.5,
+        "https_rr_only": 1.1
       },
       {
         "build_id": "2026061608",
         "date": "2026-06-16",
-        "none": 70.1,
-        "altsvc_only": 19.9,
-        "both": 7,
+        "none": 69.7,
+        "altsvc_only": 20.1,
+        "both": 7.1,
         "https_rr_only": 3
       },
       {
         "build_id": "2026061614",
         "date": "2026-06-16",
-        "none": 64,
+        "none": 64.2,
         "altsvc_only": 22.9,
         "both": 8.7,
         "https_rr_only": 4.3
@@ -449,18 +449,18 @@
       {
         "build_id": "2026061621",
         "date": "2026-06-16",
-        "none": 53.5,
-        "altsvc_only": 44.9,
-        "both": 1,
-        "https_rr_only": 0.6
+        "none": 18.9,
+        "altsvc_only": 78.6,
+        "both": 1.7,
+        "https_rr_only": 0.9
       },
       {
         "build_id": "2026061706",
         "date": "2026-06-17",
-        "none": 57.7,
-        "altsvc_only": 40.3,
-        "both": 1.2,
-        "https_rr_only": 0.8
+        "none": 34.5,
+        "altsvc_only": 62.5,
+        "both": 1.8,
+        "https_rr_only": 1.1
       },
       {
         "build_id": "2026061710",
@@ -474,201 +474,201 @@
         "build_id": "2026061721",
         "date": "2026-06-17",
         "none": 70.1,
-        "altsvc_only": 19.4,
-        "both": 7.1,
+        "altsvc_only": 19.3,
+        "both": 7.2,
         "https_rr_only": 3.4
       },
       {
         "build_id": "2026061806",
         "date": "2026-06-18",
-        "none": 54.2,
-        "altsvc_only": 44.5,
-        "both": 0.7,
-        "https_rr_only": 0.7
+        "none": 20.6,
+        "altsvc_only": 77.2,
+        "both": 1.2,
+        "https_rr_only": 1
       },
       {
         "build_id": "2026061809",
         "date": "2026-06-18",
-        "none": 62,
-        "altsvc_only": 25.1,
-        "both": 8.8,
+        "none": 62.2,
+        "altsvc_only": 24.9,
+        "both": 8.7,
         "https_rr_only": 4.1
       },
       {
         "build_id": "2026061819",
         "date": "2026-06-18",
-        "none": 54.6,
-        "altsvc_only": 44.3,
-        "both": 0.5,
-        "https_rr_only": 0.6
+        "none": 22.1,
+        "altsvc_only": 76.4,
+        "both": 0.8,
+        "https_rr_only": 0.7
       },
       {
         "build_id": "2026061820",
         "date": "2026-06-18",
-        "none": 71.4,
-        "altsvc_only": 20.3,
-        "both": 4.9,
-        "https_rr_only": 3.4
+        "none": 72.4,
+        "altsvc_only": 19.6,
+        "both": 4.7,
+        "https_rr_only": 3.3
       },
       {
         "build_id": "2026061904",
         "date": "2026-06-19",
-        "none": 69.1,
-        "altsvc_only": 18.8,
+        "none": 69.2,
+        "altsvc_only": 18.7,
         "both": 7.3,
         "https_rr_only": 4.8
       },
       {
         "build_id": "2026061907",
         "date": "2026-06-19",
-        "none": 55.1,
-        "altsvc_only": 43.1,
-        "both": 1.1,
-        "https_rr_only": 0.8
+        "none": 25.9,
+        "altsvc_only": 71.2,
+        "both": 1.8,
+        "https_rr_only": 1.1
       },
       {
         "build_id": "2026061915",
         "date": "2026-06-19",
-        "none": 67.9,
-        "altsvc_only": 19.1,
-        "both": 8.1,
+        "none": 68.5,
+        "altsvc_only": 18.7,
+        "both": 8,
         "https_rr_only": 4.9
       },
       {
         "build_id": "2026061918",
         "date": "2026-06-19",
-        "none": 56.5,
-        "altsvc_only": 41.9,
-        "both": 0.9,
-        "https_rr_only": 0.8
+        "none": 29.8,
+        "altsvc_only": 67.7,
+        "both": 1.5,
+        "https_rr_only": 1
       },
       {
         "build_id": "2026062009",
         "date": "2026-06-20",
-        "none": 66,
-        "altsvc_only": 19.5,
-        "both": 8.2,
+        "none": 66.2,
+        "altsvc_only": 19.4,
+        "both": 8.1,
         "https_rr_only": 6.3
       },
       {
         "build_id": "2026062016",
         "date": "2026-06-20",
-        "none": 63.5,
+        "none": 63.6,
         "altsvc_only": 20.8,
-        "both": 9,
+        "both": 8.9,
         "https_rr_only": 6.7
       },
       {
         "build_id": "2026062019",
         "date": "2026-06-20",
-        "none": 53.4,
-        "altsvc_only": 45.4,
-        "both": 0.6,
-        "https_rr_only": 0.7
+        "none": 18.2,
+        "altsvc_only": 79.8,
+        "both": 1,
+        "https_rr_only": 1
       },
       {
         "build_id": "2026062021",
         "date": "2026-06-20",
-        "none": 63.3,
-        "altsvc_only": 21.1,
+        "none": 63.5,
+        "altsvc_only": 21,
         "both": 8.6,
         "https_rr_only": 7
       },
       {
         "build_id": "2026062106",
         "date": "2026-06-21",
-        "none": 53.2,
-        "altsvc_only": 44.9,
-        "both": 1,
-        "https_rr_only": 0.9
+        "none": 18.2,
+        "altsvc_only": 78.9,
+        "both": 1.8,
+        "https_rr_only": 1.1
       },
       {
         "build_id": "2026062108",
         "date": "2026-06-21",
-        "none": 64.3,
-        "altsvc_only": 20.8,
-        "both": 9.1,
+        "none": 64.7,
+        "altsvc_only": 20.5,
+        "both": 9,
         "https_rr_only": 5.8
       },
       {
         "build_id": "2026062118",
         "date": "2026-06-21",
-        "none": 54.1,
-        "altsvc_only": 44.5,
-        "both": 0.9,
-        "https_rr_only": 0.6
+        "none": 20.2,
+        "altsvc_only": 77.5,
+        "both": 1.5,
+        "https_rr_only": 0.8
       },
       {
         "build_id": "2026062121",
         "date": "2026-06-21",
-        "none": 70.5,
-        "altsvc_only": 17.9,
-        "both": 6.6,
-        "https_rr_only": 5
+        "none": 73.2,
+        "altsvc_only": 16.2,
+        "both": 6,
+        "https_rr_only": 4.6
       },
       {
         "build_id": "2026062206",
         "date": "2026-06-22",
-        "none": 62.5,
-        "altsvc_only": 35.9,
-        "both": 0.7,
-        "https_rr_only": 0.9
+        "none": 42.8,
+        "altsvc_only": 55.1,
+        "both": 1.1,
+        "https_rr_only": 1
       },
       {
         "build_id": "2026062219",
         "date": "2026-06-22",
-        "none": 64.6,
-        "altsvc_only": 20.8,
-        "both": 8.5,
-        "https_rr_only": 6.1
+        "none": 64.8,
+        "altsvc_only": 20.7,
+        "both": 8.4,
+        "https_rr_only": 6
       },
       {
         "build_id": "2026062220",
         "date": "2026-06-22",
-        "none": 53.2,
-        "altsvc_only": 45.6,
-        "both": 0.6,
-        "https_rr_only": 0.7
+        "none": 16.3,
+        "altsvc_only": 82,
+        "both": 0.9,
+        "https_rr_only": 0.9
       },
       {
         "build_id": "2026062306",
         "date": "2026-06-23",
-        "none": 53.4,
-        "altsvc_only": 45.2,
-        "both": 0.6,
-        "https_rr_only": 0.8
+        "none": 17.3,
+        "altsvc_only": 80.7,
+        "both": 1,
+        "https_rr_only": 1
       },
       {
         "build_id": "2026062309",
         "date": "2026-06-23",
-        "none": 21.8,
-        "altsvc_only": 73.1,
-        "both": 3,
-        "https_rr_only": 2
+        "none": 22.6,
+        "altsvc_only": 72.2,
+        "both": 3.1,
+        "https_rr_only": 2.1
       },
       {
         "build_id": "2026062321",
         "date": "2026-06-23",
-        "none": 84.2,
-        "altsvc_only": 8.2,
+        "none": 84.4,
+        "altsvc_only": 8.1,
         "both": 4.1,
-        "https_rr_only": 3.5
+        "https_rr_only": 3.4
       },
       {
         "build_id": "2026062404",
         "date": "2026-06-24",
-        "none": 53.5,
-        "altsvc_only": 45.6,
-        "both": 0.4,
-        "https_rr_only": 0.6
+        "none": 16.8,
+        "altsvc_only": 81.8,
+        "both": 0.6,
+        "https_rr_only": 0.8
       },
       {
         "build_id": "2026062406",
         "date": "2026-06-24",
-        "none": 53.3,
-        "altsvc_only": 45.9,
-        "both": 0.3,
-        "https_rr_only": 0.6
+        "none": 15,
+        "altsvc_only": 83.9,
+        "both": 0.4,
+        "https_rr_only": 0.7
       },
       {
         "build_id": "2026062508",
@@ -1116,27 +1116,27 @@
     "version": 155,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
-      "h3_alpn": 99.4,
-      "ech": 86.4,
-      "ipv4hint": 98.2,
-      "ipv6hint": 97.7
+      "h3_alpn": 100,
+      "ech": 88.9,
+      "ipv4hint": 97.1,
+      "ipv6hint": 96.3
     },
     "by_resolver": {
       "doh": {
-        "h3_alpn": 99.5,
-        "ech": 83.2,
-        "ipv4hint": 98.1,
-        "ipv6hint": 97.5
+        "h3_alpn": 100,
+        "ech": 85.2,
+        "ipv4hint": 96.1,
+        "ipv6hint": 95.3
       },
       "native": {
-        "h3_alpn": 98.2,
-        "ech": 93,
-        "ipv4hint": 97,
-        "ipv6hint": 96.3
+        "h3_alpn": 99.1,
+        "ech": 100,
+        "ipv4hint": 98.5,
+        "ipv6hint": 97.8
       },
       "mix": {
-        "doh": 53.7,
-        "native": 46.3
+        "doh": 55.2,
+        "native": 44.8
       }
     }
   }
