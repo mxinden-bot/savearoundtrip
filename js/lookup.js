@@ -498,7 +498,25 @@ async function connectionChecks(domain, target, rrHasH3) {
     row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
   if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
   v.append(facts);
+  if (d.transport_params && Object.keys(d.transport_params).length)
+    v.append(transportParamsDetails(d.transport_params));
   pending.replaceWith(v);
+}
+
+// The server's QUIC transport parameters (RFC 9000 §18), tucked into a collapsed
+// <details> since they're only tangentially related to the h3 question.
+function transportParamsDetails(tp) {
+  const keys = Object.keys(tp).sort();
+  const d = el("details", "tp-details");
+  d.append(el("summary", null, `QUIC transport parameters <span class="tp-count">${keys.length}</span>`));
+  const list = el("ul", "facts tp-facts");
+  for (const k of keys) {
+    const raw = tp[k];
+    const val = typeof raw === "boolean" ? (raw ? "yes" : "no") : String(raw);
+    list.append(el("li", null, `<span class="k"><code>${escapeHtml(k)}</code></span><span class="val">${escapeHtml(val)}</span>`));
+  }
+  d.append(list);
+  return d;
 }
 
 /* ---- sharing ---- */
