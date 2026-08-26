@@ -503,6 +503,30 @@ async function connectionChecks(domain, target, rrHasH3) {
   pending.replaceWith(v);
 }
 
+// quic-go's qlog reports byte-count params in bytes and duration params in
+// milliseconds; the raw numbers carry no units, so we annotate them.
+const TP_BYTES = new Set([
+  "initial_max_data",
+  "initial_max_stream_data_bidi_local",
+  "initial_max_stream_data_bidi_remote",
+  "initial_max_stream_data_uni",
+  "max_udp_payload_size",
+  "max_datagram_frame_size",
+]);
+const TP_MS = new Set(["max_idle_timeout", "max_ack_delay"]);
+
+function humanBytes(n) {
+  if (n < 1024) return `${n} bytes`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let v = n, i = -1;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${n} (${Math.round(v * 10) / 10} ${units[i]})`;
+}
+
+function humanMs(n) {
+  return n >= 1000 ? `${n} ms (${Math.round(n / 100) / 10} s)` : `${n} ms`;
+}
+
 // The server's QUIC transport parameters (RFC 9000 §18), tucked into a collapsed
 // <details> since they're only tangentially related to the h3 question.
 function transportParamsDetails(tp) {
@@ -512,7 +536,11 @@ function transportParamsDetails(tp) {
   const list = el("ul", "facts tp-facts");
   for (const k of keys) {
     const raw = tp[k];
-    const val = typeof raw === "boolean" ? (raw ? "yes" : "no") : String(raw);
+    let val;
+    if (typeof raw === "boolean") val = raw ? "yes" : "no";
+    else if (typeof raw === "number" && TP_BYTES.has(k)) val = humanBytes(raw);
+    else if (typeof raw === "number" && TP_MS.has(k)) val = humanMs(raw);
+    else val = String(raw);
     list.append(el("li", null, `<span class="k"><code>${escapeHtml(k)}</code></span><span class="val">${escapeHtml(val)}</span>`));
   }
   d.append(list);
