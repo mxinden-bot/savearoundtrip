@@ -2,12 +2,13 @@
 //
 // GET /check?domain=example.com  ->  JSON:
 //
-//	{ "domain", "alt_svc", "advertises_h3", "h3_handshake_ok", "quic_versions", "transport_params", "error" }
+//	{ "domain", "alt_svc", "advertises_h3", "h3_handshake_ok", "quic_versions", "transport_params", "zero_rtt", "error" }
 //
 // - advertises_h3:  fetched the origin over HTTP/2/1.1 and its Alt-Svc header lists h3
 // - h3_handshake_ok: completed a real QUIC/HTTP-3 handshake to the origin (proof it speaks h3)
 // - quic_versions:  which QUIC versions completed an h3 handshake, e.g. ["v1","v2"]
 // - transport_params: the server's QUIC transport parameters, by name (RFC 9000 §18)
+// - zero_rtt:       whether the server issues a resumption ticket, and whether it permits 0-RTT
 //
 // This is the piece a browser can't do (CORS blocks reading Alt-Svc; browsers
 // can't force a cold h3 handshake). Runs on Fly.io where outbound UDP/QUIC works.
@@ -49,7 +50,53 @@ type result struct {
 	H3HandshakeOK   bool           `json:"h3_handshake_ok"`
 	QuicVersions    []string       `json:"quic_versions,omitempty"`
 	TransportParams map[string]any `json:"transport_params,omitempty"`
+	ZeroRTT         *zeroRTT       `json:"zero_rtt,omitempty"`
 	Error           string         `json:"error,omitempty"`
+}
+
+// zeroRTT reports whether the server, during the handshake, hands us a TLS
+// session ticket (resumption possible) and whether that ticket permits early
+// data, i.e. advertises 0-RTT for a future connection. We do not perform the
+// 0-RTT resumption itself; this is purely what the server offers.
+type zeroRTT struct {
+	TicketIssued bool `json:"ticket_issued"`
+	EarlyData    bool `json:"early_data"`
+}
+
+// ticketProbe is a tls.ClientSessionCache that records the post-handshake
+// NewSessionTicket instead of storing it for reuse. Setting it on the TLS
+// config is also what makes the client request a resumption ticket at all.
+type ticketProbe struct {
+	mu        sync.Mutex
+	issued    bool
+	earlyData bool
+	got       chan struct{}
+	once      sync.Once
+}
+
+func newTicketProbe() *ticketProbe { return &ticketProbe{got: make(chan struct{})} }
+
+func (t *ticketProbe) Get(string) (*tls.ClientSessionState, bool) { return nil, false }
+
+func (t *ticketProbe) Put(_ string, cs *tls.ClientSessionState) {
+	if cs == nil {
+		return
+	}
+	t.mu.Lock()
+	t.issued = true
+	// crypto/tls sets SessionState.EarlyData for a QUIC ticket exactly when the
+	// server advertised max_early_data_size = 0xffffffff (RFC 9001 §4.6.1).
+	if _, st, err := cs.ResumptionState(); err == nil && st != nil && st.EarlyData {
+		t.earlyData = true
+	}
+	t.mu.Unlock()
+	t.once.Do(func() { close(t.got) })
+}
+
+func (t *ticketProbe) result() *zeroRTT {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return &zeroRTT{TicketIssued: t.issued, EarlyData: t.earlyData}
 }
 
 // tpCapture pulls the peer's QUIC transport parameters out of quic-go's qlog
@@ -146,9 +193,10 @@ func checkAltSvc(ctx context.Context, host string) (string, bool) {
 // Probe HTTP/3 by attempting a handshake pinned to each QUIC version we know.
 // Returns whether any completed, the list of supported versions (v1/v2), and
 // the server's transport parameters from the first version that handshook.
-func checkH3(ctx context.Context, host string) (bool, []string, map[string]any) {
+func checkH3(ctx context.Context, host string) (bool, []string, map[string]any, *zeroRTT) {
 	var versions []string
 	var tp map[string]any
+	var zr *zeroRTT
 	for _, v := range []struct {
 		ver  quic.Version
 		name string
@@ -156,21 +204,30 @@ func checkH3(ctx context.Context, host string) (bool, []string, map[string]any) 
 		{quic.Version1, "v1"},
 		{quic.Version2, "v2"},
 	} {
-		ok, params := tryH3(ctx, host, v.ver)
+		ok, params, z := tryH3(ctx, host, v.ver)
 		if ok {
 			versions = append(versions, v.name)
 			if tp == nil {
 				tp = params
 			}
+			if zr == nil {
+				zr = z
+			}
 		}
 	}
-	return len(versions) > 0, versions, tp
+	return len(versions) > 0, versions, tp, zr
 }
 
-func tryH3(ctx context.Context, host string, v quic.Version) (bool, map[string]any) {
+// ticketWait bounds how long we linger after the response for the server's
+// post-handshake NewSessionTicket. Most servers send it immediately, so the
+// channel usually fires well before this.
+const ticketWait = 1500 * time.Millisecond
+
+func tryH3(ctx context.Context, host string, v quic.Version) (bool, map[string]any, *zeroRTT) {
 	tpc := &tpCapture{}
+	tkt := newTicketProbe()
 	tr := &http3.Transport{
-		TLSClientConfig: &tls.Config{ServerName: host, MinVersion: tls.VersionTLS13},
+		TLSClientConfig: &tls.Config{ServerName: host, MinVersion: tls.VersionTLS13, ClientSessionCache: tkt},
 		QUICConfig: &quic.Config{
 			Versions: []quic.Version{v},
 			Tracer: func(context.Context, bool, quic.ConnectionID) qlogwriter.Trace {
@@ -188,11 +245,18 @@ func tryH3(ctx context.Context, host string, v quic.Version) (bool, map[string]a
 	resp, err := do(http.MethodHead)
 	if err != nil {
 		if resp, err = do(http.MethodGet); err != nil {
-			return false, nil
+			return false, nil, nil
 		}
 	}
-	defer resp.Body.Close()
-	return resp.ProtoMajor == 3, tpc.get()
+	resp.Body.Close()
+	// The NewSessionTicket is a post-handshake message; give it a moment to land
+	// while the connection is still open.
+	select {
+	case <-tkt.got:
+	case <-time.After(ticketWait):
+	case <-ctx.Done():
+	}
+	return resp.ProtoMajor == 3, tpc.get(), tkt.result()
 }
 
 func handleCheck(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +303,7 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	res.AltSvc, res.AdvertisesH3 = checkAltSvc(ctx, domain)
-	res.H3HandshakeOK, res.QuicVersions, res.TransportParams = checkH3(ctx, domain)
+	res.H3HandshakeOK, res.QuicVersions, res.TransportParams, res.ZeroRTT = checkH3(ctx, domain)
 	writeJSON(w, http.StatusOK, res)
 }
 

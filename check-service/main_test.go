@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -51,5 +52,49 @@ func TestTPCaptureIgnoresLocalAndRestored(t *testing.T) {
 	rec.RecordEvent(qlog.ParametersSet{Initiator: qlog.InitiatorRemote, Restore: true, InitialMaxData: 2})
 	if tp := cap.get(); tp != nil {
 		t.Errorf("expected nil (local + restored ignored), got %v", tp)
+	}
+}
+
+// A ticket that permits early data (QUIC max_early_data_size = 0xffffffff, which
+// crypto/tls records as SessionState.EarlyData) should surface as both a ticket
+// being issued and 0-RTT being offered.
+func TestTicketProbeEarlyData(t *testing.T) {
+	cs, err := tls.NewResumptionState([]byte("ticket"), &tls.SessionState{EarlyData: true})
+	if err != nil {
+		t.Fatalf("NewResumptionState: %v", err)
+	}
+	tkt := newTicketProbe()
+	tkt.Put("k", cs)
+	r := tkt.result()
+	if !r.TicketIssued || !r.EarlyData {
+		t.Errorf("want ticket_issued=true early_data=true, got %+v", r)
+	}
+	select {
+	case <-tkt.got:
+	default:
+		t.Error("expected got channel to be closed after Put")
+	}
+}
+
+// A resumption ticket without early data means resumption is possible but 0-RTT
+// is not offered.
+func TestTicketProbeNoEarlyData(t *testing.T) {
+	cs, err := tls.NewResumptionState([]byte("ticket"), &tls.SessionState{})
+	if err != nil {
+		t.Fatalf("NewResumptionState: %v", err)
+	}
+	tkt := newTicketProbe()
+	tkt.Put("k", cs)
+	if r := tkt.result(); !r.TicketIssued || r.EarlyData {
+		t.Errorf("want ticket_issued=true early_data=false, got %+v", r)
+	}
+}
+
+// No ticket at all: the server issued none, so neither resumption nor 0-RTT.
+func TestTicketProbeNone(t *testing.T) {
+	tkt := newTicketProbe()
+	tkt.Put("k", nil)
+	if r := tkt.result(); r.TicketIssued || r.EarlyData {
+		t.Errorf("want ticket_issued=false early_data=false, got %+v", r)
 	}
 }

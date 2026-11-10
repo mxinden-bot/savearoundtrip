@@ -496,6 +496,10 @@ async function connectionChecks(domain, target, rrHasH3) {
   row("HTTP/3 handshake", yn(d.h3_handshake_ok));
   if (d.quic_versions && d.quic_versions.length)
     row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
+  if (d.zero_rtt) {
+    row("Session resumption", yn(d.zero_rtt.ticket_issued));
+    row("0-RTT offered", yn(d.zero_rtt.early_data));
+  }
   if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
   v.append(facts);
   if (d.transport_params && Object.keys(d.transport_params).length)
