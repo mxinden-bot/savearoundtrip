@@ -371,8 +371,10 @@ pre code { background: none; padding: 0; }
 /* AliasMode chain: example.com -> svc.example.net */
 .alias-trace {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-bottom: 16px; font-size: 13px;
+  margin: 12px 0 4px; font-size: 13px;
 }
+/* several records at one name: set each record's details apart */
+.verdict-card .facts + .facts { margin-top: 10px; border-top: 1px dashed var(--line); }
 .alias-trace .at-label {
   color: var(--fg-dim); text-transform: uppercase; letter-spacing: .04em;
   font-size: 11px; margin-right: 2px;

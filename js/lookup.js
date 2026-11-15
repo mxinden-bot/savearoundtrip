@@ -309,9 +309,9 @@ function aliasTrace(domain, hops) {
   return wrap;
 }
 
-// Render the fact cards for one name's records, labelling which name they came
-// from when we followed an alias to get here.
-function renderRecordCards(records, ownerName, whereLabel, target) {
+// Append the facts for one name's records to the HTTPS record box, labelling
+// which name they came from when we followed an alias to get here.
+function renderRecordFacts(records, ownerName, whereLabel, card) {
   records.forEach((r, i) => {
     const p = r.params;
     const facts = el("ul", "facts");
@@ -330,111 +330,78 @@ function renderRecordCards(records, ownerName, whereLabel, target) {
     row("ech", p.ech ? `<span class="val">configured (${p.ech} bytes) ✓</span>` : "<span class=\"dim\">not set</span>");
     if (r.ttl != null) row("ttl", `${r.ttl}s`);
 
-    const card = el("div", "verdict-card");
     card.append(facts);
-    target.append(card);
   });
 }
 
+// The HTTPS record box: verdict, alias chain, record details and fix, all in one.
 function render(domain, chain, target) {
   target.innerHTML = "";
   const { hops, finalName, out, status } = chain;
   const followed = hops.length > 0;
-  if (followed) target.append(aliasTrace(domain, hops));
-
-  if (status === "loop") {
-    target.append(
-      verdict(
-        "err",
-        "HTTPS alias loops",
-        `The AliasMode chain from <code>${escapeHtml(domain)}</code> points back to a ` +
-          `name it already visited, so it never resolves to a service. RFC 9460 says the ` +
-          `alias target must not loop; a browser stops here.`
-      )
-    );
-    return;
-  }
-
-  if (status === "toodeep") {
-    target.append(
-      verdict(
-        "err",
-        "HTTPS alias chain too long",
-        `Followed ${MAX_ALIAS_HOPS} AliasMode records without reaching a service. ` +
-          `Browsers cap the chain (Firefox at ${MAX_ALIAS_HOPS}) and give up, so this ` +
-          `record is effectively unusable.`
-      )
-    );
-    return;
-  }
-
-  if (status === "unavailable") {
-    target.append(
-      verdict(
-        "warn",
-        "Alias says the service is not available",
-        `<code>${escapeHtml(finalName)}</code> has an AliasMode record with target ` +
-          `<code>.</code> (root), which RFC 9460 uses to signal that the service does ` +
-          `not exist here. Clients may ignore it and connect normally.`
-      )
-    );
-    return;
-  }
-
-  // status === "resolved": `out` holds the terminal name's records.
   const hasH3 = out.records.some((r) => (r.params.alpn || []).includes("h3"));
-
-  if (!out.records.length) {
-    if (followed) {
-      target.append(
-        verdict(
-          "warn",
-          "Alias target has no HTTPS record",
-          `<code>${escapeHtml(domain)}</code> aliases to <code>${escapeHtml(finalName)}</code>, ` +
-            `but that name publishes no HTTPS record, so there's no h3 to discover from DNS. ` +
-            `Browsers fall back to its A/AAAA addresses. Publish an HTTPS record at the target:`,
-          publishHint(finalName)
-        )
-      );
-    } else {
-      target.append(
-        verdict(
-          "warn",
-          "No HTTPS record published",
-          `<code>${escapeHtml(domain)}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
-            `can only discover that <i>after</i> a first connection (e.g. via an ` +
-            `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
-            `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`,
-          publishHint(domain)
-        )
-      );
-    }
-    return;
-  }
-
   const where = followed ? ` (via alias to <code>${escapeHtml(finalName)}</code>)` : "";
-  if (hasH3) {
-    target.append(
-      verdict(
-        "ok",
-        "HTTPS record found: advertises h3 &#10003;",
-        `Browsers can negotiate HTTP/3 on the <b>first</b> connection${where}. ` +
-          `No round trip wasted.`
-      )
-    );
+
+  let kind, title, sub, hintFor = null, showRecords = false;
+  if (status === "loop") {
+    kind = "err";
+    title = "HTTPS alias loops";
+    sub =
+      `The AliasMode chain from <code>${escapeHtml(domain)}</code> points back to a ` +
+      `name it already visited, so it never resolves to a service. RFC 9460 says the ` +
+      `alias target must not loop; a browser stops here.`;
+  } else if (status === "toodeep") {
+    kind = "err";
+    title = "HTTPS alias chain too long";
+    sub =
+      `Followed ${MAX_ALIAS_HOPS} AliasMode records without reaching a service. ` +
+      `Browsers cap the chain (Firefox at ${MAX_ALIAS_HOPS}) and give up, so this ` +
+      `record is effectively unusable.`;
+  } else if (status === "unavailable") {
+    kind = "warn";
+    title = "Alias says the service is not available";
+    sub =
+      `<code>${escapeHtml(finalName)}</code> has an AliasMode record with target ` +
+      `<code>.</code> (root), which RFC 9460 uses to signal that the service does ` +
+      `not exist here. Clients may ignore it and connect normally.`;
+  } else if (!out.records.length && followed) {
+    kind = "warn";
+    title = "Alias target has no HTTPS record";
+    sub =
+      `<code>${escapeHtml(domain)}</code> aliases to <code>${escapeHtml(finalName)}</code>, ` +
+      `but that name publishes no HTTPS record, so there's no h3 to discover from DNS. ` +
+      `Browsers fall back to its A/AAAA addresses. Publish an HTTPS record at the target:`;
+    hintFor = finalName;
+  } else if (!out.records.length) {
+    kind = "warn";
+    title = "No HTTPS record published";
+    sub =
+      `<code>${escapeHtml(domain)}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
+      `can only discover that <i>after</i> a first connection (e.g. via an ` +
+      `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
+      `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`;
+    hintFor = domain;
+  } else if (hasH3) {
+    kind = "ok";
+    title = "HTTPS record found: advertises h3 &#10003;";
+    sub = `Browsers can negotiate HTTP/3 on the <b>first</b> connection${where}. No round trip wasted.`;
+    showRecords = true;
   } else {
-    target.append(
-      verdict(
-        "warn",
-        "HTTPS record found, but no h3 in ALPN",
-        `The record${where} doesn't list <code>h3</code>, so clients won't ` +
-          `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`,
-        publishHint(finalName)
-      )
-    );
+    kind = "warn";
+    title = "HTTPS record found, but no h3 in ALPN";
+    sub =
+      `The record${where} doesn't list <code>h3</code>, so clients won't ` +
+      `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`;
+    hintFor = finalName;
+    showRecords = true;
   }
 
-  renderRecordCards(out.records, finalName, followed, target);
+  const card = verdict(kind, title, sub);
+  if (followed) card.append(aliasTrace(domain, hops));
+  if (showRecords) renderRecordFacts(out.records, finalName, followed, card);
+  if (hintFor) card.append(publishHint(hintFor));
+  target.append(card);
+  return hintFor !== null;
 }
 
 function verdict(kind, title, sub, extra) {
@@ -445,66 +412,110 @@ function verdict(kind, title, sub, extra) {
   return c;
 }
 
-// Asks the backend for Alt-Svc (advertised h3) and a live HTTP/3 handshake,
-// then appends a verdict relating that to the DNS record result.
-async function connectionChecks(domain, target, rrHasH3) {
-  const pending = el("div", "verdict-card");
-  pending.append(el("div", "v-sub", `<span class="spin">checking Alt-Svc and a live HTTP/3 handshake</span>`));
-  target.append(pending);
+function pendingCard(text) {
+  const c = el("div", "verdict-card");
+  c.append(el("div", "v-sub", `<span class="spin">${text}</span>`));
+  return c;
+}
+
+function factList() {
+  const facts = el("ul", "facts");
+  const row = (k, val) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${val}</span>`));
+  return [facts, row];
+}
+
+const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
+
+// Asks the backend for the Alt-Svc header and a live HTTP/3 handshake, then
+// fills in two boxes alongside the HTTPS record one: Alt-Svc and HTTP/3.
+async function connectionChecks(domain, target, rrHasH3, hintShown) {
+  const altPending = pendingCard("checking the Alt-Svc header");
+  const h3Pending = pendingCard("trying a live HTTP/3 handshake");
+  target.append(altPending, h3Pending);
 
   let d;
   try {
     const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store" });
     d = await r.json();
   } catch {
-    pending.replaceWith(verdict("", "Live HTTP/3 check unavailable", "Couldn't reach the checker; the DNS result above still stands."));
+    altPending.remove();
+    h3Pending.replaceWith(verdict("", "Live checks unavailable", "Couldn't reach the checker; the DNS result above still stands."));
     return;
   }
   if (d.error) {
-    pending.replaceWith(verdict("", "Live HTTP/3 check skipped", escapeHtml(d.error) + "."));
+    altPending.remove();
+    h3Pending.replaceWith(verdict("", "Live checks skipped", escapeHtml(d.error) + "."));
     return;
   }
 
+  altPending.replaceWith(altSvcBox(d, rrHasH3));
+  h3Pending.replaceWith(h3Box(d, domain, rrHasH3, hintShown));
+}
+
+function altSvcBox(d, rrHasH3) {
+  let kind = "", title, sub;
+  if (d.advertises_h3) {
+    kind = "ok";
+    title = "Alt-Svc header advertises h3 &#10003;";
+    sub =
+      "Browsers that connect over HTTP/2 or HTTP/1.1 learn from this response header " +
+      "that HTTP/3 is available, and use it from the next connection on.";
+  } else {
+    title = d.alt_svc ? "Alt-Svc header doesn't advertise h3" : "No Alt-Svc header";
+    sub = rrHasH3
+      ? "Browsers learn about HTTP/3 from the HTTPS record above instead."
+      : "Browsers can't discover HTTP/3 from the response headers.";
+  }
+  const v = verdict(kind, title, sub);
+  if (d.alt_svc) {
+    const [facts, row] = factList();
+    row("header", `<code>${escapeHtml(d.alt_svc)}</code>`);
+    v.append(facts);
+  }
+  return v;
+}
+
+function h3Box(d, domain, rrHasH3, hintShown) {
   const speaks = d.h3_handshake_ok;
-  let kind = "", title = "", sub = "", extra = null;
+  let kind = "", title, sub, extra = null;
   if (speaks && rrHasH3) {
     kind = "ok";
-    title = "Speaks HTTP/3 ✓";
+    title = "Speaks HTTP/3 &#10003;";
     sub = "Confirmed with a live HTTP/3 handshake. The HTTPS record above advertises h3 too, so clients reach HTTP/3 on the very first connection.";
-  } else if (speaks && !rrHasH3) {
+  } else if (speaks) {
     kind = "warn";
     title = "Speaks HTTP/3, but it isn't in the HTTPS record";
-    sub =
-      "The server completes an HTTP/3 handshake" +
-      (d.advertises_h3 ? " and sends <code>Alt-Svc: h3</code>" : "") +
-      ", but the HTTPS record above doesn't advertise h3, so the first connection can't use HTTP/3. Publish one:";
-    extra = publishHint(domain);
-  } else if (d.advertises_h3) {
+    sub = "The server completes an HTTP/3 handshake, but no HTTPS record advertises h3, so the first connection can't use HTTP/3.";
+    if (hintShown) {
+      sub += " Publishing the record above fixes that.";
+    } else {
+      sub += " Publish one:";
+      extra = publishHint(domain);
+    }
+  } else if (d.advertises_h3 || rrHasH3) {
     kind = "warn";
-    title = "Advertises h3 via Alt-Svc, but no handshake from our checker";
-    sub = "The <code>Alt-Svc</code> header lists h3, but a live HTTP/3 handshake didn't complete from our checker (it may be geo/rate-limited or briefly down).";
+    title = "No HTTP/3 handshake from our checker";
+    sub =
+      `The ${rrHasH3 ? "HTTPS record" : "<code>Alt-Svc</code> header"} lists h3, but a live HTTP/3 handshake ` +
+      "didn't complete from our checker (it may be geo/rate-limited or briefly down).";
   } else {
     title = "No HTTP/3 detected";
-    sub = "No <code>Alt-Svc: h3</code> and no HTTP/3 handshake, so the server likely doesn't serve HTTP/3.";
+    sub = "Nothing advertises h3 and no HTTP/3 handshake completed, so the server likely doesn't serve HTTP/3.";
   }
 
   const v = verdict(kind, title, sub, extra);
-  const facts = el("ul", "facts");
-  const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
-  const row = (k, val) => facts.append(el("li", null, `<span class="k">${k}</span><span class="val">${val}</span>`));
-  row("Alt-Svc h3", yn(d.advertises_h3));
-  row("HTTP/3 handshake", yn(d.h3_handshake_ok));
+  const [facts, row] = factList();
+  row("HTTP/3 handshake", yn(speaks));
   if (d.quic_versions && d.quic_versions.length)
     row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
   if (d.zero_rtt) {
     row("Session resumption", yn(d.zero_rtt.ticket_issued));
     row("0-RTT offered", yn(d.zero_rtt.early_data));
   }
-  if (d.alt_svc) row("Alt-Svc", `<code>${escapeHtml(d.alt_svc)}</code>`);
   v.append(facts);
   if (d.transport_params && Object.keys(d.transport_params).length)
     v.append(transportParamsDetails(d.transport_params));
-  pending.replaceWith(v);
+  return v;
 }
 
 // quic-go's qlog reports byte-count params in bytes and duration params in
@@ -654,11 +665,11 @@ function init() {
     result.innerHTML = `<div class="spin">querying cloudflare-dns.com for ${domain} HTTPS …</div>`;
     try {
       const chain = await resolveChain(domain);
-      render(domain, chain, result);
+      const hintShown = render(domain, chain, result);
       const rrHasH3 =
         chain.status === "resolved" &&
         chain.out.records.some((r) => (r.params.alpn || []).includes("h3"));
-      connectionChecks(domain, result, rrHasH3);
+      connectionChecks(domain, result, rrHasH3, hintShown);
       result.append(shareRow(domain, shareSummary(domain, chain)));
     } catch (e) {
       result.innerHTML = "";
