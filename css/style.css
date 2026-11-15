@@ -409,3 +409,11 @@ footer {
 footer a { color: var(--fg-dim); }
 footer .refs-head { margin-top: 18px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .12em; font-size: 11px; }
 footer .refs { margin-top: 8px; line-height: 2; }
+
+/* branch-preview marker (claude/offer-and-race); remove before merging to main */
+.preview-banner {
+  background: var(--warn); color: #000; text-align: center;
+  font-size: 13px; padding: 8px 16px;
+}
+.preview-banner code { background: rgba(0, 0, 0, .12); padding: 1px 5px; border-radius: 4px; }
+.preview-banner a { color: #000; }
