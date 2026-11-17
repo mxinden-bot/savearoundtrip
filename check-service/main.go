@@ -150,8 +150,21 @@ var allowedOrigins = map[string]bool{
 	"https://www.savearoundtrip.com": true,
 }
 
+// Cloudflare branch previews of the site, e.g.
+// https://claude-offer-and-race-savearoundtrip.mail-f1c.workers.dev. Only the
+// site's own Cloudflare account can create names under this subdomain.
+const previewSuffix = "-savearoundtrip.mail-f1c.workers.dev"
+
+func originAllowed(origin string) bool {
+	if allowedOrigins[origin] {
+		return true
+	}
+	name, ok := strings.CutPrefix(origin, "https://")
+	return ok && strings.HasSuffix(name, previewSuffix) && !strings.ContainsAny(name, "/:@")
+}
+
 func setCORS(w http.ResponseWriter, r *http.Request) {
-	if origin := r.Header.Get("Origin"); allowedOrigins[origin] {
+	if origin := r.Header.Get("Origin"); originAllowed(origin) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 	w.Header().Set("Vary", "Origin")

@@ -98,3 +98,22 @@ func TestTicketProbeNone(t *testing.T) {
 		t.Errorf("want ticket_issued=false early_data=false, got %+v", r)
 	}
 }
+
+func TestOriginAllowed(t *testing.T) {
+	for origin, want := range map[string]bool{
+		"https://savearoundtrip.com":                                        true,
+		"https://www.savearoundtrip.com":                                    true,
+		"https://claude-offer-and-race-savearoundtrip.mail-f1c.workers.dev": true,
+		"http://claude-offer-and-race-savearoundtrip.mail-f1c.workers.dev":  false,
+		"https://evil.example/-savearoundtrip.mail-f1c.workers.dev":         false,
+		"https://x-savearoundtrip.mail-f1c.workers.dev.evil.example":        false,
+		"https://x-savearoundtrip.mail-f1c.workers.dev:8443":                false,
+		"https://savearoundtrip.mail-f1c.workers.dev.evil.example":          false,
+		"https://example.com":                                               false,
+		"":                                                                  false,
+	} {
+		if got := originAllowed(origin); got != want {
+			t.Errorf("originAllowed(%q) = %v, want %v", origin, got, want)
+		}
+	}
+}
