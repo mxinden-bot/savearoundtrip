@@ -434,7 +434,6 @@ const CHECKLIST = [
   ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code>.`, "offer-altsvc"],
   ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "offer-rr"],
   ["zerortt", "Offers 0-RTT for repeat visits", "Turn on TLS early data.", "offer-0rtt"],
-  ["ipv6", "Reachable over IPv6", "Publish an AAAA record.", "offer-ipv6"],
 ];
 const MARK = { ok: "✓", todo: "✗", na: "–", unknown: "?", pending: "" };
 
@@ -468,13 +467,6 @@ function checklist(domain) {
       update();
     },
   };
-}
-
-async function hasAAAA(domain) {
-  const res = await fetch(`${DOH}?name=${encodeURIComponent(domain)}&type=AAAA`, { headers: { accept: "application/dns-json" } });
-  if (!res.ok) throw new Error(`DoH HTTP ${res.status}`);
-  const json = await res.json();
-  return (json.Answer || []).some((a) => a.type === 28);
 }
 
 // Asks the backend for the Alt-Svc header, a live HTTP/3 handshake and 0-RTT,
@@ -735,9 +727,6 @@ function init() {
       const cl = checklist(domain);
       result.prepend(cl.el, el("div", "result-sub", "details"));
       cl.set("rr", rrHasH3 ? "ok" : "todo");
-      hasAAAA(domain)
-        .then((v) => cl.set("ipv6", v ? "ok" : "todo"))
-        .catch(() => cl.set("ipv6", "unknown", "Couldn't look up the AAAA record."));
       connectionChecks(domain, result, rrHasH3, hintShown, cl);
       result.append(shareRow(domain, shareSummary(domain, chain)));
     } catch (e) {

@@ -75,7 +75,7 @@
       </noscript>
     </div>
     <p class="fine">
-      The HTTPS and AAAA records are looked up in the browser, via Cloudflare's
+      The HTTPS record is looked up in the browser, via Cloudflare's
       DNS-over-HTTPS. The <code>Alt-Svc</code> HTTP header, the live HTTP/3
       handshake and 0-RTT can't be checked from a browser, so the domain is sent
       to a small <a href="https://github.com/mxinden-bot/savearoundtrip/tree/main/check-service">open-source backend</a>
@@ -319,11 +319,6 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       on Cloudflare. Early data can be replayed, so act only on requests that
       are safe to repeat, and answer the rest with <code>425 Too Early</code>
       (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
-    </p>
-
-    <h3 id="offer-ipv6">5 · serve IPv6</h3>
-    <p>
-      Publish an AAAA record. Happy Eyeballs races IPv6 against IPv4 as well.
     </p>
   </section>
 
