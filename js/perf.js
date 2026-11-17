@@ -66,7 +66,7 @@
     }
 
     // The "wait for first byte" segment is essentially one round trip to the
-    // server, so highlight it; that is the slice a published HTTPS record saves.
+    // server, so highlight it: that is the size of what HTTP/3 saves.
     const segs = [
       ["Connection setup", s.connect, "pl-dns"],
       ["Wait for first byte", s.wait, "pl-rt"],
@@ -96,23 +96,21 @@
       ? `over <span class="pl-badge${s.proto === "h3" ? " good" : ""}">${pn}</span> `
       : ``;
     const rttLine = rtt
-      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. A ` +
-        `published HTTPS record can save you that much: the browser uses QUIC ` +
-        `instead of TCP on its first connection, and a QUIC handshake takes one ` +
-        `round trip less.`
-      : ` A published HTTPS record can save you a round trip: the browser uses QUIC ` +
-        `instead of TCP on its first connection, and a QUIC handshake takes one ` +
-        `round trip less.`;
+      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. ` +
+        `HTTP/3 saves one of those on a new connection, and 0-RTT another on a ` +
+        `repeat visit.`
+      : ` HTTP/3 saves a round trip on a new connection, and 0-RTT another on a ` +
+        `repeat visit.`;
 
     el.innerHTML =
-      `<p class="pl-headline">This page reached you ${proto}in <b>~${ms(total)} ms</b> ` +
+      `<p class="pl-headline">Right now, this page loaded ${proto}in <b>~${ms(total)} ms</b>, ` +
       `from opening the connection to first paint.${rttLine}</p>` +
       `<div class="pl-bar">${bar}</div>` +
       `<div class="pl-key">${key}<span class="pl-keyitem pl-total">connection ` +
       `start to first paint <b>${ms(total)} ms</b></span></div>` +
       `<p class="pl-note">This page is static and tiny, so its whole budget is ` +
-      `small. A real app's is bigger, but the round trip is the same fixed cost, ` +
-      `paid up front and often to several origins.</p>`;
+      `small. A real app's is bigger, but the handshake round trips are the same ` +
+      `fixed cost, paid up front and often to several origins.</p>`;
     el.hidden = false;
   }
 
@@ -120,11 +118,6 @@
     const el = document.getElementById("pageload-viz");
     const s = pageStats();
     const rtt = await originRtt();
-
-    const clause = document.getElementById("rtt-clause");
-    if (rtt && clause) {
-      clause.innerHTML = ` For you right now, one round trip to this server is about <b>~${rtt} ms</b>.`;
-    }
     if (el && s && !s.cached) {
       render(s, rtt, el);
     }

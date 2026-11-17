@@ -1,8 +1,13 @@
-// Fetches the two Happy Eyeballs probes from GLAM's public API (server-side,
-// where the browser Same-Origin Policy does not apply) and writes a small
-// data/glam.json the static page can read. Run on CI; see .github/workflows/glam.yml.
+// Fetches Firefox telemetry from GLAM's public API (server-side, where the
+// browser Same-Origin Policy does not apply) and writes a small data/glam.json
+// the static page can read. Run on CI; see .github/workflows/glam.yml.
 //
-// Firefox NIGHTLY only: that is the only channel carrying these probes today.
+// Two parts:
+// - Firefox NIGHTLY: the two Happy Eyeballs probes (HTTP/3 discovery, HTTPS
+//   record features), the only channel carrying them today.
+// - Firefox RELEASE: HTTP version share, HTTP/3 round-trip time, connection
+//   setup time (TCP + TLS vs QUIC), IPv6 and TLS 1.3 share. Each of these is
+//   best-effort on its own: on failure the previous value is kept.
 //
 // The GLAM HTTP API is undocumented and meant for GLAM's own frontend, so this
 // is best-effort: on any failure we exit non-zero and write nothing, leaving
@@ -21,12 +26,12 @@ const EXPLORE = (probe, buckets) =>
   `https://glam.telemetry.mozilla.org/fog/probe/${probe}/explore` +
   `?activeBuckets=${encodeURIComponent(JSON.stringify(buckets))}`;
 
-async function query(probe, aggregationLevel) {
+async function query(probe, aggregationLevel, app_id = CHANNEL) {
   const res = await fetch(API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      query: { product: "fog", app_id: CHANNEL, os: "*", ping_type: "*", probe, aggregationLevel, versions: 20 },
+      query: { product: "fog", app_id, os: "*", ping_type: "*", probe, aggregationLevel, versions: 20 },
     }),
   });
   if (!res.ok) throw new Error(`${probe} (${aggregationLevel}): HTTP ${res.status}`);
@@ -141,6 +146,92 @@ function readExisting() {
 
 const SMOOTH = 14; // build points to average (~1 week of Nightly)
 
+/* ---- Firefox Release ---- */
+
+const RELEASE_VERSIONS = 8;
+
+// One clean row per version. GLAM also returns stray rows for older versions
+// whose histograms are keyed by numeric buckets, not labels; drop those.
+function labeledByVersion(rows, metricKey = "") {
+  const out = new Map();
+  for (const r of rows) {
+    if ((r.metric_key || "") !== metricKey) continue;
+    const keys = Object.keys(r.non_norm_histogram || {});
+    if (!keys.length || keys.every((k) => !isNaN(parseFloat(k)))) continue;
+    out.set(r.version, r);
+  }
+  return out;
+}
+
+// Versions to report: the newest is dropped while it is still rolling out
+// (fewer than half the users of the version before it), as on the slides.
+function settledVersions(byVersion) {
+  const vs = [...byVersion.keys()].sort((a, b) => a - b);
+  const last = vs.length - 1;
+  if (last > 0 && byVersion.get(vs[last]).total_users < 0.5 * byVersion.get(vs[last - 1]).total_users) vs.pop();
+  return vs.slice(-RELEASE_VERSIONS);
+}
+
+// Per-request share of each label: GLAM's non-normalized histogram counts
+// every request, so this matches what Firefox actually sent.
+function labelShares(row) {
+  const h = row.non_norm_histogram;
+  const tot = Object.values(h).reduce((a, b) => a + b, 0);
+  return (label) => (tot ? round((100 * (h[label] || 0)) / tot) : 0);
+}
+
+async function releaseHttpVersion() {
+  const byV = labeledByVersion(await query("networking_http_response_version", "version", "release"));
+  const vs = settledVersions(byV);
+  const sh = vs.map((v) => labelShares(byV.get(v)));
+  return {
+    versions: vs.map(String),
+    h1: sh.map((s) => s("http_1")),
+    h2: sh.map((s) => s("http_2")),
+    h3: sh.map((s) => s("http_3")),
+  };
+}
+
+async function releaseShare(probe, labels) {
+  const byV = labeledByVersion(await query(probe, "version", "release"));
+  const v = settledVersions(byV).pop();
+  const s = labelShares(byV.get(v));
+  return { version: String(v), share: round(labels.reduce((a, l) => a + s(l), 0)) };
+}
+
+// Percentiles of a (labeled) distribution for the newest settled version.
+async function releasePercentiles(probe, metricKey, scale) {
+  const rows = (await query(probe, "version", "release")).filter((r) => (r.metric_key || "") === metricKey && r.percentiles);
+  const byV = new Map(rows.map((r) => [r.version, r]));
+  const v = settledVersions(byV).pop();
+  const p = byV.get(v).percentiles;
+  const ms = (k) => Math.round(p[k] * scale);
+  return { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
+}
+
+async function fetchRelease(prev) {
+  const out = { ...(prev || {}) };
+  const tasks = {
+    http_version: () => releaseHttpVersion(),
+    // smoothed RTT of HTTP/3 connections, in ms
+    rtt: () => releasePercentiles("networking_http_3_rtt", "", 1),
+    // connection setup to servers that speak HTTP/3, page loads (ns -> ms):
+    // TCP + TLS for HTTP/2, vs the QUIC handshake for HTTP/3
+    setup_tcp: () => releasePercentiles("network_sup_http3_tcp_connection", "supports_http3_page", 1e-6),
+    setup_quic: () => releasePercentiles("network_http3_tls_handshake", "uses_http3_page", 1e-6),
+    ipv6: () => releaseShare("networking_connection_address_type", ["http_1_ipv6", "http_2_ipv6", "http_3_ipv6"]),
+    tls13: () => releaseShare("tls_handshake_version", ["tls1.3"]),
+  };
+  for (const [k, fn] of Object.entries(tasks)) {
+    try {
+      out[k] = await fn();
+    } catch (e) {
+      console.warn(`  release.${k}: ${e.message}, kept previous value`);
+    }
+  }
+  return out;
+}
+
 async function main() {
   const FEAT_PROBE = "netwerk_happy_eyeballs_https_rr_features_by_resolver";
   const h3Builds = await query("netwerk_happy_eyeballs_h3_discovery", "build_id");
@@ -195,11 +286,14 @@ async function main() {
     byNative[f] = round(fAvg[`native_${f}`]);
   }
 
+  const release = await fetchRelease(prev?.release);
+
   const data = {
     source: "Firefox Nightly, via GLAM (per-connection estimate)",
     channel: CHANNEL,
     approximate: true,
     fetched_at: new Date().toISOString(),
+    release,
     h3_discovery,
     https_rr_features: {
       version: Math.max(...featBuilds.map((r) => r.version)),
@@ -218,6 +312,7 @@ async function main() {
   console.log("  h3 share:", data.h3_discovery.share, "(altsvc_only headline)");
   console.log("  features:", data.https_rr_features.share_of_records);
   console.log("  series points:", series.length);
+  console.log("  release:", JSON.stringify(release));
 }
 
 main().catch((e) => {

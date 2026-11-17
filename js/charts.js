@@ -1,8 +1,9 @@
-/* Renders the real-browser numbers from data/glam.json (refreshed on CI from
- * GLAM; see scripts/fetch-glam.mjs). Same-origin static file, so no CORS.
+/* Renders the real-browser numbers from data/glam.json (refreshed daily on CI
+ * from GLAM; see scripts/fetch-glam.mjs). Same-origin static file, so no CORS.
  *
- * Shares are GLAM's "By Client ID" proportion: sample_count[bucket] divided by
- * the sum over buckets, per build. That matches what the GLAM UI shows. */
+ * Firefox Release: per-request shares and percentiles as GLAM reports them.
+ * Firefox Nightly (HTTP/3 discovery, HTTPS record features): per-connection
+ * estimates reconstructed from GLAM's non-normalized histograms. */
 
 // bucket key -> [friendly label, color class]
 const BUCKETS = {
@@ -158,40 +159,135 @@ function renderTrend(el, series) {
   el.append(legend);
 }
 
-async function loadGlam() {
-  const section = document.getElementById("data");
-  const metricNum = document.getElementById("metric-num");
-  const metricSrc = document.getElementById("metric-src");
+/* ---- Firefox Release numbers (round trips, setup time, adoption) ---- */
 
+const GLAM = (probe, name) =>
+  `<a href="https://glam.telemetry.mozilla.org/fog/probe/${probe}/explore">${name}</a>`;
+const set = (id, html) => {
+  const e = document.getElementById(id);
+  if (e) e.innerHTML = html;
+  return e;
+};
+
+// Two bars per percentile, old protocol vs new, on one shared ms scale.
+function renderPaired(el, rows, max) {
+  el.innerHTML = "";
+  for (const [label, a, b] of rows) {
+    const w = (v) => Math.max(0.5, Math.min(100, (100 * v) / max)).toFixed(1);
+    el.append(
+      elem(
+        "div",
+        "pair",
+        `<span class="bar-label">${label}</span><span class="pair-bars">` +
+          `<span class="pair-row"><span class="bar-track"><span class="bar-fill c-old" style="width:${w(a)}%"></span></span><span class="bar-val">${a} ms</span></span>` +
+          `<span class="pair-row"><span class="bar-track"><span class="bar-fill c-new" style="width:${w(b)}%"></span></span><span class="bar-val"><b>${b} ms</b></span></span>` +
+          `</span>`
+      )
+    );
+  }
+}
+
+// HTTP/3 share per Firefox version, as columns.
+function renderColumns(el, labels, values) {
+  const W = 720, H = 190, padT = 26, padB = 26, padX = 6;
+  const max = Math.max(40, Math.ceil(Math.max(...values) / 10) * 10);
+  const slot = (W - 2 * padX) / values.length, bw = Math.min(46, slot * 0.6);
+  const y = (v) => padT + (1 - v / max) * (H - padT - padB);
+  let s = "";
+  values.forEach((v, i) => {
+    const x = padX + slot * (i + 0.5);
+    const last = i === values.length - 1;
+    s +=
+      `<rect class="col${last ? " last" : ""}" x="${(x - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - padB - y(v)).toFixed(1)}" rx="2"></rect>` +
+      `<text class="cv${last ? " last" : ""}" x="${x.toFixed(1)}" y="${(y(v) - 7).toFixed(1)}" text-anchor="middle">${v}%</text>` +
+      `<text class="ax" x="${x.toFixed(1)}" y="${H - 7}" text-anchor="middle">${labels[i]}</text>`;
+  });
+  el.innerHTML =
+    `<svg class="col-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="HTTP/3 share of Firefox requests by Firefox version">` +
+    `<line class="base" x1="0" x2="${W}" y1="${H - padB}" y2="${H - padB}"></line>${s}</svg>`;
+}
+
+function renderRelease(rel) {
+  if (!rel) return;
+
+  if (rel.rtt) {
+    const t = document.getElementById("rtt-stats");
+    if (t) {
+      t.innerHTML = "";
+      for (const [k, l] of [["p50", "median"], ["p75", "P75"], ["p95", "P95"], ["p99", "P99"]]) {
+        const c = elem("div", "stat");
+        c.append(elem("div", "n", `${rel.rtt[k]} ms`), elem("div", "l", l));
+        t.append(c);
+      }
+    }
+    set(
+      "rtt-cap",
+      `Round-trip time of HTTP/3 connections, Firefox ${rel.rtt.version} Release, all platforms. ` +
+        `Source: GLAM: ${GLAM("networking_http_3_rtt", "networking.http_3_rtt")}.`
+    );
+  }
+
+  if (rel.setup_tcp && rel.setup_quic) {
+    const a = rel.setup_tcp, b = rel.setup_quic;
+    const el = document.getElementById("chart-setup");
+    if (el) renderPaired(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]], Math.max(a.p95, b.p95));
+    set(
+      "setup-cap",
+      `Connection setup time, desktop page loads to servers that speak HTTP/3, Firefox ${a.version} Release: ` +
+        `TCP + TLS for HTTP/2 vs the QUIC handshake for HTTP/3. Source: GLAM: ` +
+        `${GLAM("network_sup_http3_tcp_connection", "network.sup_http3_tcp_connection")}, ` +
+        `${GLAM("network_http3_tls_handshake", "network.http3_tls_handshake")}.`
+    );
+  }
+
+  const hv = rel.http_version;
+  if (hv && hv.h3 && hv.h3.length) {
+    const el = document.getElementById("chart-h3-share");
+    if (el) renderColumns(el, hv.versions.map((v) => `v${v}`), hv.h3);
+    set(
+      "h3-share-cap",
+      `Share of HTTP responses that came over HTTP/3, Firefox Release, by version. ` +
+        `Source: GLAM: ${GLAM("networking_http_response_version", "networking.http_response_version")}.`
+    );
+  }
+
+  if (rel.ipv6 && rel.tls13 && hv) {
+    const h3now = hv.h3[hv.h3.length - 1];
+    const el = document.getElementById("chart-adopt");
+    if (el)
+      renderBars(el, [
+        ["IPv6, 1998", rel.ipv6.share, "c-old"],
+        ["TLS 1.3, 2018", rel.tls13.share, "c-new"],
+        ["HTTP/3, 2022", h3now, "c-new"],
+      ]);
+    set(
+      "adopt-cap",
+      `Share of Firefox ${rel.tls13.version} Release traffic: IPv6 of HTTP requests ` +
+        `(${GLAM("networking_connection_address_type", "networking.connection_address_type")}), ` +
+        `TLS 1.3 of TLS handshakes (${GLAM("tls_handshake_version", "tls_handshake_version")}), ` +
+        `HTTP/3 of HTTP responses (${GLAM("networking_http_response_version", "networking.http_response_version")}). ` +
+        `Year of the standard: <a href="https://www.rfc-editor.org/rfc/rfc2460">RFC 2460</a>, ` +
+        `<a href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446</a>, ` +
+        `<a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114</a>.`
+    );
+  }
+}
+
+async function loadGlam() {
   let d;
   try {
     const r = await fetch("data/glam.json", { cache: "no-store" });
     if (!r.ok) throw new Error("no glam.json");
     d = await r.json();
   } catch {
-    if (metricNum) {
-      metricNum.textContent = "??%";
-      metricNum.classList.remove("loading");
-    }
+    const section = document.getElementById("data");
     if (section) section.hidden = true;
     return;
   }
 
-  const when = (d.fetched_at || "").slice(0, 10);
-
-  // headline number
-  if (metricNum) {
-    metricNum.textContent = d.h3_discovery.share.altsvc_only + "%";
-    metricNum.classList.remove("loading");
-  }
-  if (metricSrc) {
-    metricSrc.innerHTML =
-      `Firefox Nightly, via <a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Approximate per-connection estimate, averaged over recent builds.`;
-  }
+  renderRelease(d.release);
 
   const share = d.h3_discovery.share;
-  const hc = d.h3_discovery.counts || {};
   const stats = document.getElementById("stats-h3");
   if (stats) renderStats(stats, share);
 
@@ -242,13 +338,16 @@ async function loadGlam() {
       `</tbody></table>`;
   }
 
-  const src = document.getElementById("data-src");
-  if (src) {
-    src.innerHTML =
-      `Source: Firefox Nightly, via ` +
-      `<a href="${d.h3_discovery.explore_url}">GLAM</a>, updated ${when}. ` +
-      `Per-connection estimate reconstructed from GLAM's histograms and averaged over recent builds, so approximate.`;
-  }
+  // The discovery probe's data stops at some build; say which, rather than
+  // implying it is as fresh as the rest of the page.
+  const pts = (d.h3_discovery.series || []).filter((p) => STACK.some((k) => p[k] > 0));
+  const lastBuild = pts.length ? pts[pts.length - 1].date : "";
+  set(
+    "data-src",
+    `Each bar is one Nightly build${lastBuild ? `, up to ${lastBuild}` : ""}. Source: Firefox Nightly, via ` +
+      `<a href="${d.h3_discovery.explore_url}">GLAM</a>. Per-connection estimate reconstructed from ` +
+      `GLAM's histograms and averaged over recent builds, so approximate.`
+  );
 }
 
 document.addEventListener("DOMContentLoaded", loadGlam);

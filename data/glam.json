@@ -2,7 +2,80 @@
   "source": "Firefox Nightly, via GLAM (per-connection estimate)",
   "channel": "nightly",
   "approximate": true,
-  "fetched_at": "2026-11-15T13:58:17.386Z",
+  "fetched_at": "2026-11-17T16:39:55.357Z",
+  "release": {
+    "http_version": {
+      "versions": [
+        "152",
+        "153",
+        "154",
+        "155",
+        "156",
+        "157",
+        "158",
+        "159"
+      ],
+      "h1": [
+        21.2,
+        20.7,
+        20.2,
+        20.8,
+        20.6,
+        20.7,
+        20.8,
+        18.1
+      ],
+      "h2": [
+        51.3,
+        51.5,
+        49.7,
+        50.4,
+        49.5,
+        49,
+        48.6,
+        49.3
+      ],
+      "h3": [
+        27.5,
+        27.8,
+        30,
+        28.8,
+        29.9,
+        30.2,
+        30.6,
+        32.7
+      ]
+    },
+    "rtt": {
+      "version": "159",
+      "p50": 29,
+      "p75": 58,
+      "p95": 219,
+      "p99": 558
+    },
+    "setup_tcp": {
+      "version": "159",
+      "p50": 73,
+      "p75": 146,
+      "p95": 537,
+      "p99": 1969
+    },
+    "setup_quic": {
+      "version": "159",
+      "p50": 40,
+      "p75": 73,
+      "p95": 246,
+      "p99": 759
+    },
+    "ipv6": {
+      "version": "159",
+      "share": 24
+    },
+    "tls13": {
+      "version": "159",
+      "share": 88.2
+    }
+  },
   "h3_discovery": {
     "version": 154,
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_h3_discovery/explore?activeBuckets=%5B%22none%22%2C%22altsvc_only%22%2C%22both%22%2C%22https_rr_only%22%5D",
@@ -1117,26 +1190,26 @@
     "explore_url": "https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore?activeBuckets=%5B%22doh%5Btotal%5D%22%2C%22native%5Btotal%5D%22%2C%22doh%5Bh3_alpn%5D%22%2C%22native%5Bh3_alpn%5D%22%5D",
     "share_of_records": {
       "h3_alpn": 100,
-      "ech": 93.4,
+      "ech": 94,
       "ipv4hint": 100,
       "ipv6hint": 100
     },
     "by_resolver": {
       "doh": {
         "h3_alpn": 100,
-        "ech": 93.3,
+        "ech": 93.2,
         "ipv4hint": 100,
         "ipv6hint": 100
       },
       "native": {
         "h3_alpn": 100,
-        "ech": 94,
+        "ech": 100,
         "ipv4hint": 100,
         "ipv6hint": 100
       },
       "mix": {
-        "doh": 52.6,
-        "native": 47.4
+        "doh": 53.6,
+        "native": 46.4
       }
     }
   }

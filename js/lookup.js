@@ -369,26 +369,26 @@ function render(domain, chain, target) {
     title = "Alias target has no HTTPS record";
     sub =
       `<code>${escapeHtml(domain)}</code> aliases to <code>${escapeHtml(finalName)}</code>, ` +
-      `but that name publishes no HTTPS record, so there's no h3 to discover from DNS. ` +
+      `but that name publishes no HTTPS record, so there's no HTTP/3 to discover from DNS. ` +
       `Browsers fall back to its A/AAAA addresses. Publish an HTTPS record at the target:`;
     hintFor = finalName;
   } else if (!out.records.length) {
     kind = "warn";
     title = "No HTTPS record published";
     sub =
-      `<code>${escapeHtml(domain)}</code> has no HTTPS RR. If it serves HTTP/3, browsers ` +
-      `can only discover that <i>after</i> a first connection (e.g. via an ` +
-      `<code>Alt-Svc</code> HTTP header), costing a wasted round trip. ` +
-      `Publishing an HTTPS RR with <code>alpn="h3"</code> fixes that.`;
+      `<code>${escapeHtml(domain)}</code> has no HTTPS DNS record. If it serves HTTP/3, ` +
+      `browsers can only discover that <i>after</i> a first connection (via the ` +
+      `<code>Alt-Svc</code> HTTP header), so the first connection can't use it. ` +
+      `Publishing a record with <code>alpn="h3"</code> fixes that.`;
     hintFor = domain;
   } else if (hasH3) {
     kind = "ok";
-    title = "HTTPS record found: advertises h3 &#10003;";
+    title = "HTTPS record found: advertises HTTP/3 &#10003;";
     sub = `Browsers can negotiate HTTP/3 on the <b>first</b> connection${where}. No round trip wasted.`;
     showRecords = true;
   } else {
     kind = "warn";
-    title = "HTTPS record found, but no h3 in ALPN";
+    title = "HTTPS record found, but no HTTP/3 in it";
     sub =
       `The record${where} doesn't list <code>h3</code>, so clients won't ` +
       `try HTTP/3 from DNS. Add <code>h3</code> to the <code>alpn</code> set.`;
@@ -426,13 +426,65 @@ function factList() {
 
 const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
 
-// Asks the backend for the Alt-Svc header and a live HTTP/3 handshake, then
-// fills in two boxes alongside the HTTPS record one: Alt-Svc and HTTP/3.
-async function connectionChecks(domain, target, rrHasH3, hintShown) {
+/* ---- the checklist: what a domain offers browsers for HTTP/3 ---- */
+
+// [key, item, what to do when missing, how-to anchor]
+const CHECKLIST = [
+  ["h3", "Serves HTTP/3", "Turn on HTTP/3 on the server or CDN, with UDP port 443 open.", "offer-h3"],
+  ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code>.`, "offer-altsvc"],
+  ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "offer-rr"],
+  ["zerortt", "Offers 0-RTT for repeat visits", "Turn on TLS early data.", "offer-0rtt"],
+  ["ipv6", "Reachable over IPv6", "Publish an AAAA record.", "offer-ipv6"],
+];
+const MARK = { ok: "✓", todo: "✗", na: "–", unknown: "?", pending: "" };
+
+function checklist(domain) {
+  const card = el("div", "checklist");
+  card.append(el("div", "cl-head", `HTTP/3 checklist for <code>${escapeHtml(domain)}</code> <span class="cl-count"></span>`));
+  const list = el("ul", "cl-list");
+  card.append(list);
+  const items = {}, state = {};
+  for (const [key, label] of CHECKLIST) {
+    const li = el("li", "cl-item pending", `<span class="cl-mark" aria-hidden="true"></span><span class="cl-text">${label}<span class="cl-note"></span></span>`);
+    list.append(li);
+    items[key] = li;
+    state[key] = "pending";
+  }
+  const count = card.querySelector(".cl-count");
+  const update = () => {
+    const done = Object.values(state).filter((s) => s === "ok").length;
+    count.textContent = Object.values(state).includes("pending") ? "checking" : `${done} of ${CHECKLIST.length} done`;
+  };
+  update();
+  return {
+    el: card,
+    set(key, s, note) {
+      const [, , fix, anchor] = CHECKLIST.find((c) => c[0] === key);
+      const li = items[key];
+      state[key] = s;
+      li.className = `cl-item ${s}`;
+      li.querySelector(".cl-mark").textContent = MARK[s];
+      li.querySelector(".cl-note").innerHTML = s === "todo" ? `${fix} <a href="#${anchor}">How</a>` : note || "";
+      update();
+    },
+  };
+}
+
+async function hasAAAA(domain) {
+  const res = await fetch(`${DOH}?name=${encodeURIComponent(domain)}&type=AAAA`, { headers: { accept: "application/dns-json" } });
+  if (!res.ok) throw new Error(`DoH HTTP ${res.status}`);
+  const json = await res.json();
+  return (json.Answer || []).some((a) => a.type === 28);
+}
+
+// Asks the backend for the Alt-Svc header, a live HTTP/3 handshake and 0-RTT,
+// then fills in the checklist and two boxes alongside the HTTPS record one.
+async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
   const altPending = pendingCard("checking the Alt-Svc header");
   const h3Pending = pendingCard("trying a live HTTP/3 handshake");
   target.append(altPending, h3Pending);
 
+  const unknown = (note) => ["h3", "altsvc", "zerortt"].forEach((k) => cl.set(k, "unknown", note));
   let d;
   try {
     const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store" });
@@ -440,13 +492,24 @@ async function connectionChecks(domain, target, rrHasH3, hintShown) {
   } catch {
     altPending.remove();
     h3Pending.replaceWith(verdict("", "Live checks unavailable", "Couldn't reach the checker; the DNS result above still stands."));
+    unknown("Couldn't reach the checker.");
     return;
   }
   if (d.error) {
     altPending.remove();
     h3Pending.replaceWith(verdict("", "Live checks skipped", escapeHtml(d.error) + "."));
+    unknown(escapeHtml(d.error) + ".");
     return;
   }
+
+  const speaks = d.h3_handshake_ok;
+  if (speaks) cl.set("h3", "ok");
+  else if (d.advertises_h3 || rrHasH3) cl.set("h3", "unknown", "Advertised, but the live handshake from our checker didn't complete.");
+  else cl.set("h3", "todo");
+  cl.set("altsvc", d.advertises_h3 ? "ok" : "todo");
+  if (!speaks) cl.set("zerortt", "na", "Needs HTTP/3 first.");
+  else if (d.zero_rtt) cl.set("zerortt", d.zero_rtt.early_data ? "ok" : "todo");
+  else cl.set("zerortt", "unknown", "Not checked.");
 
   altPending.replaceWith(altSvcBox(d, rrHasH3));
   h3Pending.replaceWith(h3Box(d, domain, rrHasH3, hintShown));
@@ -456,12 +519,12 @@ function altSvcBox(d, rrHasH3) {
   let kind = "", title, sub;
   if (d.advertises_h3) {
     kind = "ok";
-    title = "Alt-Svc header advertises h3 &#10003;";
+    title = "Alt-Svc header advertises HTTP/3 &#10003;";
     sub =
       "Browsers that connect over HTTP/2 or HTTP/1.1 learn from this response header " +
       "that HTTP/3 is available, and use it from the next connection on.";
   } else {
-    title = d.alt_svc ? "Alt-Svc header doesn't advertise h3" : "No Alt-Svc header";
+    title = d.alt_svc ? "Alt-Svc header doesn't advertise HTTP/3" : "No Alt-Svc header";
     sub = rrHasH3
       ? "Browsers learn about HTTP/3 from the HTTPS record above instead."
       : "Browsers can't discover HTTP/3 from the response headers.";
@@ -481,11 +544,11 @@ function h3Box(d, domain, rrHasH3, hintShown) {
   if (speaks && rrHasH3) {
     kind = "ok";
     title = "Speaks HTTP/3 &#10003;";
-    sub = "Confirmed with a live HTTP/3 handshake. The HTTPS record above advertises h3 too, so clients reach HTTP/3 on the very first connection.";
+    sub = "Confirmed with a live HTTP/3 handshake. The HTTPS record above advertises HTTP/3 too, so clients reach HTTP/3 on the very first connection.";
   } else if (speaks) {
     kind = "warn";
     title = "Speaks HTTP/3, but it isn't in the HTTPS record";
-    sub = "The server completes an HTTP/3 handshake, but no HTTPS record advertises h3, so the first connection can't use HTTP/3.";
+    sub = "The server completes an HTTP/3 handshake, but no HTTPS record advertises HTTP/3, so the first connection can't use HTTP/3.";
     if (hintShown) {
       sub += " Publishing the record above fixes that.";
     } else {
@@ -496,11 +559,11 @@ function h3Box(d, domain, rrHasH3, hintShown) {
     kind = "warn";
     title = "No HTTP/3 handshake from our checker";
     sub =
-      `The ${rrHasH3 ? "HTTPS record" : "<code>Alt-Svc</code> header"} lists h3, but a live HTTP/3 handshake ` +
+      `The ${rrHasH3 ? "HTTPS record" : "<code>Alt-Svc</code> header"} lists HTTP/3, but a live HTTP/3 handshake ` +
       "didn't complete from our checker (it may be geo/rate-limited or briefly down).";
   } else {
     title = "No HTTP/3 detected";
-    sub = "Nothing advertises h3 and no HTTP/3 handshake completed, so the server likely doesn't serve HTTP/3.";
+    sub = "Nothing advertises HTTP/3 and no HTTP/3 handshake completed, so the server likely doesn't serve HTTP/3.";
   }
 
   const v = verdict(kind, title, sub, extra);
@@ -592,7 +655,7 @@ function shareSummary(domain, chain) {
     return `${domain} publishes no usable HTTPS DNS record, so browsers can't use HTTP/3 on the first connection.`;
   if (out.records.some((r) => (r.params.alpn || []).includes("h3")))
     return `${domain} advertises HTTP/3 in its HTTPS DNS record${via}, so browsers can use HTTP/3 on the first connection.`;
-  return `${domain} has an HTTPS DNS record${via} but doesn't advertise HTTP/3 (h3) in it.`;
+  return `${domain} has an HTTPS DNS record${via} but doesn't advertise HTTP/3 in it.`;
 }
 
 // Mastodon has no central share endpoint (it's federated), so ask for the
@@ -669,7 +732,13 @@ function init() {
       const rrHasH3 =
         chain.status === "resolved" &&
         chain.out.records.some((r) => (r.params.alpn || []).includes("h3"));
-      connectionChecks(domain, result, rrHasH3, hintShown);
+      const cl = checklist(domain);
+      result.prepend(cl.el, el("div", "result-sub", "details"));
+      cl.set("rr", rrHasH3 ? "ok" : "todo");
+      hasAAAA(domain)
+        .then((v) => cl.set("ipv6", v ? "ok" : "todo"))
+        .catch(() => cl.set("ipv6", "unknown", "Couldn't look up the AAAA record."));
+      connectionChecks(domain, result, rrHasH3, hintShown, cl);
       result.append(shareRow(domain, shareSummary(domain, chain)));
     } catch (e) {
       result.innerHTML = "";

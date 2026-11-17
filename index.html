@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>savearoundtrip: publish an HTTPS DNS record, skip a round trip</title>
-<meta name="description" content="Sites send Alt-Svc: h3 but publish no HTTPS DNS record, so browsers waste a round trip before using HTTP/3. Publish an HTTPS RR (RFC 9460) and connect to QUIC on the first connection.">
+<title>savearoundtrip: save a round trip with HTTP/3</title>
+<meta name="description" content="HTTP/3 connects in one round trip less than HTTP/2, and 0-RTT saves another on repeat visits. Offer it on the server: the browser races it and falls back. Check a domain.">
 <meta property="og:title" content="savearoundtrip">
-<meta property="og:description" content="Publish an HTTPS DNS record. Let browsers reach HTTP/3 on the first connection instead of wasting a round trip.">
+<meta property="og:description" content="Save a round trip with HTTP/3. Offer it on the server, the browser races it on the client.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#0d0f12" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f7f8f5" media="(prefers-color-scheme: light)">
@@ -21,10 +21,10 @@
     <span class="brand">savearoundtrip</span>
     <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="nav">☰</button>
     <nav id="nav">
-      <a href="#check">check a domain</a>
-      <a href="#cost">the cost</a>
-      <a href="#why">the problem</a>
-      <a href="#how">why HTTPS</a>
+      <a href="#check">check</a>
+      <a href="#round-trips">round trips</a>
+      <a href="#race">race</a>
+      <a href="#signals">signals</a>
       <a href="#data">data</a>
       <a href="#publish">publish</a>
       <a href="#faq">faq</a>
@@ -32,288 +32,302 @@
   </header>
 
   <div class="hero">
-    <h1>Advertise HTTP/3 support in an HTTPS DNS record, not just an Alt-Svc
-      header, and browsers use HTTP/3 (QUIC) on the <span class="hl">first connection</span>.</h1>
+    <h1>Save a round trip with <span class="hl">HTTP/3</span>.</h1>
     <p class="lede">
-      A browser can discover a site's HTTP/3 support two ways: either by first connecting
-      over HTTP/1 or HTTP/2 and reading its <code>Alt-Svc</code> HTTP header, or right
-      away from an <b>HTTPS DNS record</b> lookup. Only with the HTTPS DNS record
-      can the browser use HTTP/3 on the first connection, saving a round trip using QUIC.
+      HTTP/3 runs on QUIC, which sets up a secure connection in one round trip
+      less than TCP and TLS. On a repeat visit, 0-RTT puts the request in the
+      very first packet. Offer HTTP/3 on the server, and the browser races it
+      on the client, falling back where it does not work.
     </p>
-  </div>
-
-  <!-- headline metric -->
-  <div class="metric">
-    <div class="big loading" id="metric-num">…</div>
-    <div class="cap" id="metric-cap">
-      of connections in Firefox Nightly reach HTTP/3 only on a <b>later</b>
-      connection: the site advertised HTTP/3 only in an <code>Alt-Svc</code> HTTP
-      header, not in DNS, though it could have published both. A published
-      HTTPS record would have saved each one a round trip on the first
-      connection.<span id="rtt-clause"></span>
-    </div>
-    <div class="src" id="metric-src">loading from GLAM...</div>
+    <a class="ladder" href="#round-trips" aria-label="Round trips until the first response byte">
+      <span class="rung"><span class="n">3</span><span class="l">HTTP/2<br>TCP + TLS 1.3</span></span>
+      <span class="rung good"><span class="n">2</span><span class="l">HTTP/3<br>QUIC</span></span>
+      <span class="rung best"><span class="n">1</span><span class="l">HTTP/3<br>QUIC 0-RTT</span></span>
+    </a>
+    <p class="ladder-cap">Round trips until the first response byte. DNS not counted.</p>
   </div>
 
   <!-- CHECK -->
   <section id="check">
     <h2>check a domain</h2>
+    <p class="dim">A checklist of what a domain offers browsers for HTTP/3.</p>
     <div class="tool">
       <form id="lookup-form">
         <div class="prompt">
           <input id="domain" type="text" placeholder="example.com" autocomplete="off"
                  autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url"
-                 aria-label="Domain to look up">
-          <button id="go" type="submit" aria-label="Look up HTTPS record">look up</button>
+                 aria-label="Domain to check">
+          <button id="go" type="submit" aria-label="Check domain">check</button>
         </div>
       </form>
       <div class="examples">
         try:
         <a href="#" data-example="savearoundtrip.com">savearoundtrip.com</a>
         <a href="#" data-example="cloudflare.com">cloudflare.com</a>
-        <a href="#" data-example="blog.mozilla.org">blog.mozilla.org</a>
+        <a href="#" data-example="www.google.com">www.google.com</a>
         <a href="#" data-example="github.com">github.com</a>
         <a href="#" data-example="example.com">example.com</a>
       </div>
       <div id="result" role="status" aria-live="polite"></div>
       <noscript>
-        <div class="noscript">This live checker needs JavaScript. You can run the
-          same query yourself: <code>dig +short HTTPS example.com</code> (or
-          <code>kdig</code> / <code>dog</code>).</div>
+        <div class="noscript">This checker needs JavaScript. The DNS part works
+          from a terminal too: <code>dig +short HTTPS example.com</code>.</div>
       </noscript>
     </div>
-    <p class="dim" style="font-size:12.5px;margin-top:14px">
-      This site eats its own dog food:
+    <p class="fine">
+      The HTTPS and AAAA records are looked up in the browser, via Cloudflare's
+      DNS-over-HTTPS. The <code>Alt-Svc</code> HTTP header, the live HTTP/3
+      handshake and 0-RTT can't be checked from a browser, so the domain is sent
+      to a small <a href="https://github.com/mxinden-bot/savearoundtrip/tree/main/check-service">open-source backend</a>
+      that runs those checks with <a href="https://github.com/quic-go/quic-go">quic-go</a>.
+      Nothing is stored.
       <a href="#check" data-example="savearoundtrip.com">savearoundtrip.com</a>
-      publishes an HTTPS record with h3, IP hints, and ECH.
-    </p>
-    <p class="dim" style="font-size:12.5px;margin-top:14px">
-      The HTTPS record is looked up in your browser via Cloudflare's
-      DNS-over-HTTPS endpoint. The <code>Alt-Svc</code> header and a live HTTP/3
-      handshake can't be checked from a browser (CORS hides cross-origin
-      headers, and a browser can't force a cold QUIC connection), so the domain
-      you enter is sent to a small
-      <a href="https://github.com/mxinden-bot/savearoundtrip/tree/main/check-service">open-source backend</a>
-      that runs only those two checks. Nothing is stored.
-    </p>
-    <p class="dim" style="font-size:12.5px;margin-top:14px">
-      The live HTTP/3 handshake is performed with
-      <a href="https://github.com/quic-go/quic-go">quic-go</a>.
+      itself publishes an HTTPS record with HTTP/3, IP hints and ECH.
     </p>
   </section>
 
-  <!-- COST -->
-  <section id="cost">
-    <h2>what a round trip costs</h2>
+  <!-- ROUND TRIPS -->
+  <section id="round-trips">
+    <h2>one round trip less</h2>
     <p>
-      A round trip is one message to the server and back, bounded by the speed
-      of light: roughly 5 to 20 ms within a city, 40 to 80 ms across a country,
-      and 150 ms or more across an ocean or a mobile network
-      (<a href="https://radar.cloudflare.com/quality">Cloudflare Radar</a> has
-      live numbers). It is paid where people notice: under about 100 ms an
-      interaction feels instantaneous; past that it feels like waiting
-      (<a href="https://www.nngroup.com/articles/response-times-3-important-limits/">Nielsen
-      Norman Group</a>).
+      Before the first byte of a response arrives, every new connection pays
+      round trips for its handshakes. QUIC folds the transport and the TLS
+      handshake into one, so HTTP/3 saves a round trip. 0-RTT saves another on
+      a repeat visit.
     </p>
+    <div class="rt-grid">
+      <figure class="rt-card">
+        <figcaption><b>HTTP/2</b> over TCP + TLS 1.3 <span class="rt-n">3 round trips</span></figcaption>
+        <div id="seq-tls13" class="seqbox"></div>
+      </figure>
+      <figure class="rt-card good">
+        <figcaption><b>HTTP/3</b> over QUIC <span class="rt-n">2 round trips</span></figcaption>
+        <div id="seq-quic" class="seqbox"></div>
+      </figure>
+      <figure class="rt-card best">
+        <figcaption><b>HTTP/3</b> with 0-RTT <span class="rt-n">1 round trip</span></figcaption>
+        <div id="seq-0rtt" class="seqbox"></div>
+      </figure>
+    </div>
+    <p class="chart-cap">
+      Round trips until the first response byte, DNS not counted. TLS 1.3 over
+      TCP has 0-RTT too, but the TCP handshake still costs a round trip first.
+    </p>
+
+    <h3>what one round trip costs</h3>
+    <div class="statgrid" id="rtt-stats"></div>
+    <p>For the slowest users, every round trip saved is a visible difference.</p>
+    <p class="chart-cap" id="rtt-cap"></p>
     <div id="pageload-viz" class="plviz" hidden></div>
+
+    <h3>QUIC connects in about half the time</h3>
+    <div id="chart-setup" class="bars"></div>
+    <div class="legend"><span class="legend-item"><span class="legend-dot c-old"></span>TCP + TLS (HTTP/2)</span><span class="legend-item"><span class="legend-dot c-new"></span>QUIC (HTTP/3)</span></div>
+    <p class="chart-cap" id="setup-cap"></p>
   </section>
 
-  <!-- WHY -->
-  <section id="why">
-    <h2>the wasted round trip</h2>
+  <!-- RACE -->
+  <section id="race">
+    <h2>offer on the server, race on the client</h2>
     <p>
-      <code>Alt-Svc</code> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
-      is an HTTP response header. To read it, the client must finish a request, which
-      means it has <i>already</i> opened a TCP connection, done a TLS handshake,
-      and spoken HTTP/1.1 or HTTP/2. Only then does it learn "by the way, I also
-      speak HTTP/3". The HTTP/3 upgrade lands on the <i>next</i> connection.
+      HTTP/3 is faster, but it does not work everywhere. Antivirus software
+      inspects it and breaks it
+      (<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=2034178">bug 2034178</a>),
+      VPNs stall it
+      (<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1734110">bug 1734110</a>),
+      and some networks block UDP
+      (<a href="https://www.rfc-editor.org/rfc/rfc9308#section-3.1">RFC 9308</a>).
+      Across Meta's apps and sites, QUIC works
+      <a href="https://www.mail-archive.com/quic@ietf.org/msg03313.html">97%+ of the time</a>.
+      Which protocol works depends on the user's network. The site cannot know.
     </p>
     <p>
-      An <b>HTTPS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
-      carries the same "I speak HTTP/3" signal, but in the DNS. The client
-      reads it during the name resolution it was going to do anyway,
-      <i>before</i> it opens any connection. So it can make its very first
-      connection over QUIC/HTTP/3, with no earlier HTTP/1 or HTTP/2 connection
-      spent just to find out.
+      So the browser races. Happy Eyeballs tries several options at once and
+      keeps the first that connects. It started with IPv6, with IPv4 as the
+      fallback (<a href="https://www.rfc-editor.org/rfc/rfc8305">RFC 8305</a>).
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a>
+      adds HTTP/3, with HTTP/2 as the fallback. In Firefox it is on in Nightly
+      and for 50% of Release.
+    </p>
+    <p class="mantra">Offer HTTP/3 without risk: where it breaks, the browser falls back.</p>
+
+    <h3>more HTTP/3, faster first paint</h3>
+    <div class="bars">
+      <div class="bar-row"><span class="bar-label">control</span><span class="bar-track"><span class="bar-fill c-old" style="width:19.6%"></span></span><span class="bar-val">19.6%</span></div>
+      <div class="bar-row"><span class="bar-label">Happy Eyeballs v3</span><span class="bar-track"><span class="bar-fill c-new" style="width:24.6%"></span></span><span class="bar-val">24.6%</span></div>
+    </div>
+    <p>
+      With Happy Eyeballs v3, a quarter more page loads use HTTP/3, and first
+      contentful paint is faster at every percentile: median
+      <b>661 ms to 643 ms</b>, P99 <b>11.2 s to 10.8 s</b>.
+    </p>
+    <p class="chart-cap">
+      Share of page loads whose main document came over HTTP/3, on a new
+      connection. Firefox 160 Release experiment, 5 to 13 November 2026:
+      7.7M page loads (control) and 8.0M (Happy Eyeballs v3). Tracking:
+      <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1953459">bug 1953459</a>.
+    </p>
+
+    <h3>the internet cannot switch all at once</h3>
+    <div id="chart-adopt" class="bars"></div>
+    <p class="quote">"Transition is easiest when changing only one entity still benefits that entity."
+      <a href="https://www.rfc-editor.org/rfc/rfc8170#section-1">RFC 8170</a></p>
+    <p>
+      TLS 1.3 got there that way: a client offers it, a server that supports it
+      gains right away, and everyone else falls back to TLS 1.2. HTTP/3 works
+      the same way.
+    </p>
+    <p class="chart-cap" id="adopt-cap"></p>
+  </section>
+
+  <!-- SIGNALS -->
+  <section id="signals">
+    <h2>tell the browser about HTTP/3</h2>
+    <p>
+      The browser can only race HTTP/3 if it knows the server offers it. There
+      are two ways to say so, plus 0-RTT for the repeat visit.
     </p>
 
     <div class="seq">
       <div class="seqcol bad">
-        <h4>HTTP/3 advertised only via the Alt-Svc HTTP header</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up A / AAAA
-    D-->>C: IP address
-    C->>S: TCP SYN
-    S-->>C: SYN-ACK
-    C->>S: TLS ClientHello
-    S-->>C: TLS ServerHello, Finished
-    C->>S: HTTP/2 request
-    S-->>C: response + Alt-Svc: h3
-    Note over C,S: only now does the client learn you speak HTTP/3
-    Note over C,S: Second connection
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-        </pre>
-        <div class="verdict">HTTP/3 only on the second connection.</div>
+        <h4><code>Alt-Svc</code> HTTP header</h4>
+        <div id="seq-altsvc" class="seqbox"></div>
+        <div class="verdict">HTTP/3 from the second connection on.</div>
       </div>
       <div class="seqcol good">
-        <h4>HTTP/3 advertised in an HTTPS DNS record</h4>
-        <pre class="mermaid">
-sequenceDiagram
-    participant C as Client
-    participant D as DNS
-    participant S as Your server
-    Note over C,S: First connection
-    C->>D: look up HTTPS record
-    D-->>C: alpn=h3 + IP hints (+ ECH)
-    C->>S: QUIC + HTTP/3 handshake
-    S-->>C: connected (HTTP/3)
-    C->>S: HTTP/3 request
-    S-->>C: response
-        </pre>
-        <div class="verdict">HTTP/3 right away, on the first connection.</div>
+        <h4>HTTPS DNS record</h4>
+        <div id="seq-https" class="seqbox"></div>
+        <div class="verdict">HTTP/3 on the first connection.</div>
       </div>
     </div>
 
-  </section>
-
-  <!-- HOW / why RR is superior -->
-  <section id="how">
-    <h2>why the HTTPS record is strictly better</h2>
     <p>
-      The HTTPS resource record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>,
-      Nov 2023) folds everything a client needs to
-      open the optimal connection into the DNS answer it was already fetching.
-      Concretely:
+      <b><code>Alt-Svc</code></b> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
+      is an HTTP response header. The browser reads it only after a first
+      connection over TCP, so HTTP/3 starts on the next one.
+    </p>
+    <p>
+      An <b>HTTPS DNS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
+      carries the same signal in the DNS. The browser looks it up alongside the
+      A and AAAA records, before it connects, so even the first connection can
+      use HTTP/3.
     </p>
 
-    <h3>1 · HTTP/3 discovery before the first byte</h3>
+    <h3>0-RTT for the repeat visit</h3>
     <p>
-      The <code>alpn</code> SvcParam lists the
-      <a href="https://www.rfc-editor.org/rfc/rfc7301">ALPN</a> protocol IDs the
-      endpoint speaks, e.g. <code>h3</code> (<a
-      href="https://www.rfc-editor.org/rfc/rfc9114">HTTP/3</a>) and
-      <code>h2</code>. Because it arrives during name resolution, the client
-      can pick QUIC for its <i>very first</i> connection instead of discovering
-      h3 only after a previous HTTP/1 or HTTP/2 connection.
+      After an HTTP/3 connection, the server can hand the browser a session
+      ticket that allows early data. On the next visit, the request goes out in
+      the first packet, together with the handshake
+      (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
     </p>
 
-    <h3>2 · ECH: Encrypted Client Hello (only the DNS can deliver it)</h3>
-    <p>
-      The <code>ech</code> SvcParam carries the endpoint's <code>ECHConfigList</code>
-      public keys (<a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849</a>).
-      ECH encrypts the TLS ClientHello, including the SNI server name, so a
-      network observer can't see which site you're visiting. This is a
-      <b>chicken-and-egg</b> problem an HTTP header can't solve: you need the public
-      key <i>before</i> you send the first ClientHello, which is exactly when no
-      connection exists yet. Only an out-of-band channel, the DNS (the
-      HTTPS record), can bootstrap ECH. No HTTPS RR, no ECH.
-    </p>
-
-    <h3>3 · IP hints: start connecting sooner</h3>
-    <p>
-      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy
-      Eyeballs v3</a> already issues the A, AAAA, and HTTPS queries in parallel.
-      The <code>ipv4hint</code> and <code>ipv6hint</code> inside that HTTPS answer
-      give it candidate addresses to start connecting from when the answer
-      arrives before the A/AAAA records, instead of waiting on them. The A/AAAA
-      records still come and supersede the hints; the hints just keep the first
-      connection attempt from stalling on a lookup that has not returned yet.
-      <code>Alt-Svc</code> has no equivalent.
-    </p>
-
-    <h3>4 · One authoritative source, sane caching</h3>
-    <p>
-      Reachability lives in the DNS with a normal TTL, instead of being smeared
-      across per-origin HTTP-header caches with their <code>max-age</code>
-      dilemma: too long and clients use stale alternatives, too short and they
-      fall back to older protocols more often than they should. The browser was
-      going to do a DNS lookup anyway; this just makes that lookup carry the answer.
-    </p>
-
+    <h3>recommended: publish the HTTPS record too</h3>
+    <p>Keep sending <code>Alt-Svc</code>, and add the record. It does more than the header can:</p>
+    <ul class="tick">
+      <li><b>HTTP/3 before the first connection</b>, not after it.</li>
+      <li><b>ECH.</b> The record carries the keys that encrypt the TLS ClientHello,
+        including the server name (<a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849</a>).
+        A header can't: the key is needed before the first connection.</li>
+      <li><b>IP hints.</b> <code>ipv4hint</code> and <code>ipv6hint</code> let the
+        browser start connecting when the HTTPS answer arrives before the A and
+        AAAA records.</li>
+      <li><b>One source of truth</b>, cached with a DNS TTL, instead of a
+        per-origin header cache.</li>
+    </ul>
     <table class="cmp">
       <thead>
-        <tr><th>capability</th><th>Alt-Svc HTTP header (RFC 7838)</th><th>HTTPS RR (RFC 9460)</th></tr>
+        <tr><th></th><th><code>Alt-Svc</code> HTTP header</th><th>HTTPS DNS record</th></tr>
       </thead>
       <tbody>
-        <tr><td>learned when?</td><td class="no">after a full connection</td><td class="yes">during DNS resolution</td></tr>
-        <tr><td>h3 on first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
-        <tr><td>IP hints</td><td class="no">n/a</td><td class="yes">ipv4hint / ipv6hint</td></tr>
-        <tr><td>ECH keys</td><td class="no">impossible</td><td class="yes">ech param</td></tr>
-        <tr><td>source of truth</td><td class="no">HTTP header + fragile cache</td><td class="yes">the DNS, with a TTL</td></tr>
+        <tr><td>learned</td><td class="no">after a first connection</td><td class="yes">before connecting</td></tr>
+        <tr><td>HTTP/3 on the first connection</td><td class="no">no</td><td class="yes">yes</td></tr>
+        <tr><td>IP hints</td><td class="no">no</td><td class="yes"><code>ipv4hint</code> / <code>ipv6hint</code></td></tr>
+        <tr><td>ECH keys</td><td class="no">no</td><td class="yes"><code>ech</code></td></tr>
       </tbody>
     </table>
   </section>
 
-  <!-- DATA (real-browser numbers from GLAM) -->
+  <!-- DATA -->
   <section id="data">
     <h2>from a real browser</h2>
     <p>
-      <span class="badge">Firefox Nightly</span>
-      Measured by Firefox itself, via Mozilla's public
-      <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry.
+      Firefox measures all of this. The numbers on this page come from Mozilla's
+      public <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry and
+      refresh daily.
     </p>
-    <p>
-      A browser can learn that a server speaks HTTP/3 in <b>two</b> ways: from
-      the <code>Alt-Svc</code> HTTP response header (seen only after it has
-      already connected), or from an <b>HTTPS DNS record</b> (seen before
-      connecting). So every connection falls into one of four groups:
-    </p>
-    <ul class="tick">
-      <li><b>Neither</b>: HTTP/3 was not advertised at all.</li>
-      <li><b>Alt-Svc only</b>: advertised, but only in the header, so the first connection could not use it.</li>
-      <li><b>HTTPS record only</b>: advertised in DNS, so the first connection could go straight to HTTP/3.</li>
-      <li><b>Both</b>: advertised in DNS and the header.</li>
-    </ul>
 
-    <h3>HTTP/3 discovery, by the numbers</h3>
+    <h3>HTTP/3 share of Firefox requests</h3>
+    <div id="chart-h3-share"></div>
+    <p class="chart-cap" id="h3-share-cap"></p>
+
+    <h3>how Firefox learns about HTTP/3</h3>
+    <p class="dim">
+      <span class="badge">Firefox Nightly</span>
+      Each connection, by how the server advertised HTTP/3:
+    </p>
     <div class="statgrid" id="stats-h3"></div>
     <div id="chart-h3" class="bars"></div>
     <p class="chart-cap">
-      Share of measured connections, Firefox Nightly. The four groups cover
-      every connection, so they add up to 100%. The two right-hand groups had a
-      usable HTTPS record; <b>Alt-Svc only</b> is the gap a record would close.
+      <b>Alt-Svc only</b> could not use HTTP/3 on the first connection; an
+      HTTPS record would have let it. The four groups add up to 100%.
     </p>
-
-    <h3>How it is developing over time</h3>
     <div id="chart-trend"></div>
-    <p class="chart-cap">
-      Each bar is one Nightly build, split into the four groups (100%).
-      Firefox Nightly only.
-    </p>
-
     <p class="chart-cap" id="data-src"></p>
   </section>
 
   <!-- PUBLISH -->
   <section id="publish">
-    <h2>publish one (it's one line)</h2>
-    <p>A ServiceMode HTTPS record advertising h3, with address hints:</p>
+    <h2>offer HTTP/3</h2>
+    <p>What the checklist above asks for, and how.</p>
+
+    <h3 id="offer-h3">1 · turn on HTTP/3</h3>
+    <p>
+      On the server or the CDN. QUIC runs over UDP, so open UDP port 443 in the
+      firewall. Keep HTTP/2 on: it is the fallback.
+    </p>
+
+    <h3 id="offer-altsvc">2 · send <code>Alt-Svc</code></h3>
+    <pre><code><span class="tok-key">Alt-Svc:</span> <span class="tok-val">h3=":443"; ma=86400</span></code></pre>
+    <p class="dim">
+      HTTP/3 on port 443 of the same host; the browser may remember it for a day
+      (<code>ma</code>, in seconds).
+    </p>
+
+    <h3 id="offer-rr">3 · publish an HTTPS DNS record</h3>
+    <p>A ServiceMode record advertising HTTP/3, with address hints:</p>
     <pre><code><span class="tok-com">; zone file (BIND-style)</span>
 example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
-    <p>Reading it left to right:</p>
     <ul class="fields">
-      <li><code>example.com.</code> the name you publish it under; the trailing dot makes it fully qualified.</li>
-      <li><code>3600</code> the TTL: how many seconds a resolver may cache the record.</li>
-      <li><code>IN</code> the DNS class (Internet), as on every web record.</li>
-      <li><code>HTTPS</code> the record type (RFC 9460).</li>
-      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode (this record carries the parameters); <code>0</code> is AliasMode, which just points at another target the client then resolves (the <a href="#check">checker</a> follows that, like a browser does).</li>
+      <li><code>example.com.</code> the name it is published under; the trailing dot makes it fully qualified.</li>
+      <li><code>3600</code> the TTL: how long resolvers may cache it, in seconds. A longer TTL keeps it cached for more visitors.</li>
+      <li><code>IN</code> <code>HTTPS</code> the class and the record type (RFC 9460).</li>
+      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode: this record carries the parameters. <code>0</code> is AliasMode: it points at another name, which the browser then resolves (the <a href="#check">checker</a> follows it too).</li>
       <li><code>.</code> the target host. <code>.</code> means the owner name itself, here <code>example.com</code>.</li>
-      <li><code>alpn="h3,h2"</code> the protocols the server speaks, best first: <code>h3</code> is HTTP/3, <code>h2</code> is HTTP/2.</li>
-      <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the client can start connecting to right away, alongside its A/AAAA lookups.</li>
+      <li><code>alpn="h3,h2"</code> the protocols the server speaks: <code>h3</code> is HTTP/3, <code>h2</code> is HTTP/2.</li>
+      <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the browser can start connecting to right away.</li>
     </ul>
     <p class="dim">
-      Most managed DNS providers (Cloudflare, Route&nbsp;53, and others) expose an
-      HTTPS record type directly. Verify yours with the <a href="#check">checker</a>.
+      Most managed DNS providers (Cloudflare, Route&nbsp;53, and others) offer
+      the HTTPS record type directly.
+    </p>
+
+    <h3 id="offer-0rtt">4 · turn on 0-RTT</h3>
+    <p>
+      Often a single switch: <code>ssl_early_data on;</code> in
+      <a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data">nginx</a>,
+      <a href="https://developers.cloudflare.com/speed/optimization/protocol/0-rtt-connection-resumption/">0-RTT Connection Resumption</a>
+      on Cloudflare. Early data can be replayed, so act only on requests that
+      are safe to repeat, and answer the rest with <code>425 Too Early</code>
+      (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
+    </p>
+
+    <h3 id="offer-ipv6">5 · serve IPv6</h3>
+    <p>
+      Publish an AAAA record. Happy Eyeballs races IPv6 against IPv4 as well.
     </p>
   </section>
 
-  <!-- RECORDS (what records carry in the wild) -->
+  <!-- RECORDS -->
   <section id="records">
     <h2>what HTTPS records carry in the wild</h2>
     <p class="dim">
@@ -328,12 +342,11 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       Per-connection estimate reconstructed from GLAM's histograms, so approximate.
     </p>
 
-    <h3>By resolver: DoH vs native</h3>
+    <h3>by resolver: DoH vs native</h3>
     <p class="dim" id="resolver-mix"></p>
     <div id="chart-feat-resolver"></div>
     <p class="chart-cap">
-      Firefox now reports these split by the resolver that produced the record.
-      Both paths carry the same features; a published record reaches either.
+      Both paths carry the same features: a published record reaches either.
     </p>
   </section>
 
@@ -341,34 +354,30 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
   <section id="faq">
     <h2>faq</h2>
 
-    <h3>Does my CDN publish this automatically?</h3>
+    <h3>Can turning on HTTP/3 break a site?</h3>
+    <p>
+      Not for a browser that races. Firefox with Happy Eyeballs v3 tries HTTP/3
+      and HTTP/2 and keeps the first that connects. Keep HTTP/2 on as the
+      fallback.
+    </p>
+
+    <h3>Does my CDN do this automatically?</h3>
     <p>
       Some do. Cloudflare, for one, serves an HTTPS record with
       <code>alpn="h3"</code> automatically for proxied zones. Others leave it to
-      you. The quickest way to find out is to <a href="#check">check your domain</a>
-      above.
+      the site. The <a href="#check">checker</a> shows what a domain offers today.
     </p>
 
     <h3>Will an HTTPS record break older clients?</h3>
     <p>
-      No. A client that doesn't understand HTTPS records just ignores them and
-      falls back to ordinary A/AAAA lookups (and your <code>Alt-Svc</code> header,
-      if you still send it). Publishing one is strictly additive.
-    </p>
-
-    <h3>What about repeat visits?</h3>
-    <p>
-      Even better: once a client has spoken HTTP/3 with you, a return visit can
-      resume the QUIC connection in <b>0-RTT</b>, putting the first request on
-      the wire with no handshake round trip at all. And the HTTPS record itself
-      is cached for its TTL like any DNS answer, so repeat visits usually skip
-      the lookup too.
+      No. A client that doesn't understand HTTPS records ignores them and falls
+      back to the A and AAAA records, and the <code>Alt-Svc</code> header.
     </p>
 
     <h3>Which browsers use the HTTPS record, and do they need DoH?</h3>
     <p>
       All the major engines support it, on by default, and read the record
-      whether or not the visitor has DNS-over-HTTPS enabled:
+      whether or not DNS-over-HTTPS is on:
       <a href="https://mailarchive.ietf.org/arch/msg/dnsop/ldaCto09yaOuSXM92HgJhGqmPJw/">Safari</a>
       uses the operating-system resolver,
       <a href="https://chromestatus.com/feature/5154357283651584">Chrome</a>
@@ -379,28 +388,37 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
-      No. Keep sending it as a fallback for anything that did not get the HTTPS
-      record: older clients, and resolvers or networks that do not deliver it.
-      With the record in place, browsers that do read it learn about HTTP/3 from
-      DNS instead, and no longer spend a round trip discovering it.
+      No. Keep it as a fallback for clients that did not get the HTTPS record:
+      older clients, and resolvers or networks that do not deliver it.
+    </p>
+
+    <h3>Is 0-RTT safe?</h3>
+    <p>
+      For requests that are safe to repeat. Early data has no replay
+      protection, so a network attacker can resend it. Servers accept it for
+      such requests and answer the rest with <code>425 Too Early</code>, which
+      the browser can retry after the handshake
+      (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
     </p>
   </section>
 
   <footer>
     <div>
-      A nudge toward a faster, more private web. Created by
+      Save a round trip: offer on the server, race on the client. Created by
       <a href="https://max-inden.de/">Max Inden</a>; contribute on
       <a href="https://github.com/mxinden-bot/savearoundtrip">GitHub</a>.
     </div>
     <div class="refs-head">further reading</div>
     <div class="refs">
-      <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
-      <a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838 Alt-Svc</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 HTTP/3</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc9000">RFC 9000 QUIC</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc9001">RFC 9001 QUIC-TLS</a> ·
       <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838 Alt-Svc</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470 early data</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849 ECH</a> ·
-      <a href="https://www.ietf.org/archive/id/draft-thomson-httpbis-alt-svcb-00.html">draft-thomson-httpbis-alt-svcb-00</a>
+      <a href="https://www.rfc-editor.org/rfc/rfc8170">RFC 8170 protocol transitions</a>
     </div>
   </footer>
 
@@ -424,50 +442,40 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     });
   })();
 </script>
+<script src="js/seq.js"></script>
+<script>
+  // The handshake diagrams, the same as on the performance.now() 2026 slides.
+  (function () {
+    var CS = [{ id: "C", label: "Client" }, { id: "S", label: "Server" }];
+    var CDS = [{ id: "C", label: "Client" }, { id: "D", label: "DNS" }, { id: "S", label: "Server" }];
+    Seq.register("seq-tls13", { actors: CS, label: "TCP plus TLS 1.3: three round trips", messages: [
+      { from: "C", to: "S", text: "TCP SYN" }, { from: "S", to: "C", text: "SYN-ACK", dashed: true },
+      { from: "C", to: "S", text: "TLS ClientHello" }, { from: "S", to: "C", text: "ServerHello ... Finished", dashed: true },
+      { from: "C", to: "S", text: "Finished + GET /", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
+    ] });
+    Seq.register("seq-quic", { actors: CS, label: "QUIC: two round trips", messages: [
+      { from: "C", to: "S", text: "QUIC Initial: ClientHello" }, { from: "S", to: "C", text: "ServerHello ... Finished", dashed: true },
+      { from: "C", to: "S", text: "Finished + GET /", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
+    ] });
+    Seq.register("seq-0rtt", { actors: CS, label: "QUIC 0-RTT: one round trip", messages: [
+      { from: "C", to: "S", text: "ClientHello + GET /", hl: true }, { from: "S", to: "C", text: "ServerHello ... response", dashed: true },
+    ] });
+    Seq.register("seq-altsvc", { actors: CDS, label: "Alt-Svc: HTTP/3 only on the next connection", messages: [
+      { from: "C", to: "D", text: "A / AAAA" }, { from: "D", to: "C", text: "IP address", dashed: true },
+      { from: "C", to: "S", text: "TCP + TLS + HTTP/2" }, { from: "S", to: "C", text: "response + Alt-Svc: h3", dashed: true },
+      { note: "the browser learns about HTTP/3 only now", over: ["C", "S"] },
+      { from: "C", to: "S", text: "next connection: HTTP/3", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
+    ] });
+    Seq.register("seq-https", { actors: CDS, label: "HTTPS DNS record: HTTP/3 on the first connection", messages: [
+      { from: "C", to: "D", text: "HTTPS record" }, { from: "D", to: "C", text: "alpn=h3 + IP hints", dashed: true },
+      { from: "C", to: "S", text: "QUIC + HTTP/3", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
+    ] });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", Seq.renderAll);
+    else Seq.renderAll();
+  })();
+</script>
 <script src="js/charts.js"></script>
 <script src="js/perf.js"></script>
 <script src="js/lookup.js"></script>
-<script type="module">
-  // Mermaid renders the two sequence diagrams. It's a ~1MB CDN module, so we
-  // only fetch it once the diagrams are about to scroll into view. If it never
-  // loads, the raw diagram source stays visible as a readable fallback.
-  let loaded = false;
-  async function renderDiagrams() {
-    if (loaded) return;
-    loaded = true;
-    try {
-      const { default: mermaid } = await import(
-        "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
-      );
-      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: dark ? "dark" : "default",
-        securityLevel: "loose",
-        fontFamily: "var(--mono)",
-        sequence: { useMaxWidth: true, mirrorActors: false },
-      });
-      await mermaid.run({ querySelector: ".mermaid" });
-    } catch (e) {
-      /* leave the source text visible */
-    }
-  }
-
-  const seq = document.querySelector(".seq");
-  if (seq && "IntersectionObserver" in window) {
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          io.disconnect();
-          renderDiagrams();
-        }
-      },
-      { rootMargin: "400px" }
-    );
-    io.observe(seq);
-  } else {
-    renderDiagrams();
-  }
-</script>
 </body>
 </html>
