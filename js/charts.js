@@ -169,72 +169,208 @@ const set = (id, html) => {
   return e;
 };
 
-// Two bars per percentile, old protocol vs new, on one shared ms scale.
-function renderPaired(el, rows, max) {
-  el.innerHTML = "";
-  for (const [label, a, b] of rows) {
-    const w = (v) => Math.max(0.5, Math.min(100, (100 * v) / max)).toFixed(1);
-    el.append(
-      elem(
-        "div",
-        "pair",
-        `<span class="bar-label">${label}</span><span class="pair-bars">` +
-          `<span class="pair-row"><span class="bar-track"><span class="bar-fill c-old" style="width:${w(a)}%"></span></span><span class="bar-val">${a} ms</span></span>` +
-          `<span class="pair-row"><span class="bar-track"><span class="bar-fill c-new" style="width:${w(b)}%"></span></span><span class="bar-val"><b>${b} ms</b></span></span>` +
-          `</span>`
-      )
-    );
-  }
+const msLabel = (v) => (v >= 1000 ? `${v / 1000} s` : `${v} ms`);
+
+// Charts drawn at the container's real pixel width (so text keeps its size on
+// a phone) re-render on resize.
+const sized = [];
+let resizeT;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => sized.forEach((f) => f()), 150);
+});
+function drawSized(f) {
+  sized.push(f);
+  f();
 }
 
-// HTTP/3 share per Firefox version, as columns.
-function renderColumns(el, labels, values) {
-  const W = 720, H = 190, padT = 26, padB = 26, padX = 6;
-  const max = Math.max(40, Math.ceil(Math.max(...values) / 10) * 10);
-  const slot = (W - 2 * padX) / values.length, bw = Math.min(46, slot * 0.6);
-  const y = (v) => padT + (1 - v / max) * (H - padT - padB);
+// Distribution of round-trip times on a log axis, one column per GLAM bucket
+// (exponential buckets, so equal width), with the percentiles marked on it.
+function renderRttHist(el, rtt) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const padL = 30, padR = 12, padT = 44, padB = 24, H = narrow ? 200 : 230;
+  const lo = 1, hi = 10000, L = Math.log10;
+  const x = (v) => padL + ((L(Math.min(Math.max(v, lo), hi)) - L(lo)) / (L(hi) - L(lo))) * (W - padL - padR);
+  const bs = rtt.hist.filter(([k]) => k >= lo && k < hi);
+  const step = Math.max(...bs.map((b) => b[1])) > 6 ? 2 : 1;
+  const yMax = Math.ceil(Math.max(...bs.map((b) => b[1])) / step) * step;
+  const base = H - padB;
+  const y = (s) => padT + (1 - s / yMax) * (base - padT);
+
+  let grid = "";
+  for (let t = 0; t <= yMax; t += step) {
+    grid += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t}%</text>`;
+  }
+  for (const t of [1, 10, 100, 1000, 10000]) {
+    grid += `<text class="ax" x="${x(t)}" y="${H - 6}" text-anchor="middle">${msLabel(t)}</text>`;
+  }
+
+  let cols = "", hits = "";
+  bs.forEach(([k, share], i) => {
+    const next = i + 1 < bs.length ? bs[i + 1][0] : hi;
+    const x0 = x(k), x1 = x(next);
+    const w = Math.max(1, x1 - x0 - 2), top = y(share), r = Math.min(2, w / 2);
+    if (share > 0 && base - top > 0.5) {
+      cols += `<path class="hcol" d="M${x0},${base} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + w - r} Q${x0 + w},${top} ${x0 + w},${top + r} V${base} Z"></path>`;
+    }
+    hits += `<rect class="hit" data-i="${i}" x="${x0}" y="${padT}" width="${Math.max(1, x1 - x0)}" height="${base - padT}"></rect>`;
+  });
+
+  // Percentile markers: hairlines with labels in two staggered rows, so
+  // neighbours (P50/P75, P95/P99) never collide.
+  const fs = narrow ? 11 : 12;
+  let marks = "";
+  [["P50", rtt.p50], ["P75", rtt.p75], ["P95", rtt.p95], ["P99", rtt.p99]].forEach(([name, v], i) => {
+    const xm = x(v), ly = i % 2 ? 32 : 15;
+    const half = ((name.length + 1 + msLabel(v).length) * fs * 0.56) / 2;
+    const lx = Math.min(Math.max(xm, padL + half), W - padR - half);
+    marks += `<line class="pmark" x1="${xm}" x2="${xm}" y1="${padT - 6}" y2="${base}"></line>` +
+      `<text class="plabel" x="${lx}" y="${ly}" text-anchor="middle" font-size="${fs}"><tspan class="pname">${name}</tspan> ${msLabel(v)}</text>`;
+  });
+
+  el.innerHTML =
+    `<div class="trend hist"><svg class="hist-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
+    `aria-label="Distribution of HTTP/3 round-trip times: median ${rtt.p50} ms, P75 ${rtt.p75} ms, P95 ${rtt.p95} ms, P99 ${rtt.p99} ms">` +
+    `${grid}<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${cols}${marks}${hits}</svg>` +
+    `<div class="trend-tip" hidden></div></div>`;
+
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip");
+  wrap.querySelectorAll("rect.hit").forEach((h) => {
+    const i = +h.dataset.i, [k, share] = bs[i], next = i + 1 < bs.length ? bs[i + 1][0] : hi;
+    const move = (e) => {
+      tip.hidden = false;
+      tip.innerHTML = `<div class="tip-date">${k} to ${next} ms</div><div class="tip-row">share<span class="tip-v">${share}%</span></div>`;
+      const box = wrap.getBoundingClientRect();
+      let lx = e.clientX - box.left + 14;
+      if (lx + 170 > box.width) lx = e.clientX - box.left - 170;
+      tip.style.left = Math.max(4, lx) + "px";
+      tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+    };
+    h.addEventListener("mouseenter", move);
+    h.addEventListener("mousemove", move);
+    h.addEventListener("mouseleave", () => (tip.hidden = true));
+  });
+}
+
+// Before -> after per percentile: a gray dot (TCP + TLS) joined to a green dot
+// (QUIC) on a linear axis from 0, so "about half" is visible; exact values in
+// a column on the right.
+function renderDumbbell(el, rows) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const padL = 40, padR = narrow ? 92 : 120, rowH = 40, padT = 8, padB = 26;
+  const H = padT + rows.length * rowH + padB;
+  const max = Math.ceil(Math.max(...rows.map((r) => Math.max(r[1], r[2]))) / 200) * 200;
+  const x = (v) => padL + (v / max) * (W - padL - padR);
   let s = "";
-  values.forEach((v, i) => {
-    const x = padX + slot * (i + 0.5);
-    const last = i === values.length - 1;
-    s +=
-      `<rect class="col${last ? " last" : ""}" x="${(x - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - padB - y(v)).toFixed(1)}" rx="2"></rect>` +
-      `<text class="cv${last ? " last" : ""}" x="${x.toFixed(1)}" y="${(y(v) - 7).toFixed(1)}" text-anchor="middle">${v}%</text>` +
-      `<text class="ax" x="${x.toFixed(1)}" y="${H - 7}" text-anchor="middle">${labels[i]}</text>`;
+  for (let t = 0; t <= max; t += 200) {
+    s += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${padT}" y2="${H - padB}"></line>` +
+      `<text class="ax" x="${x(t)}" y="${H - 8}" text-anchor="middle">${t} ms</text>`;
+  }
+  rows.forEach(([name, a, b], i) => {
+    const cy = padT + i * rowH + rowH / 2;
+    s += `<text class="rowname" x="0" y="${cy + 4}">${name}</text>` +
+      `<line class="dlink" x1="${x(b)}" x2="${x(a)}" y1="${cy}" y2="${cy}"></line>` +
+      `<circle class="dot old" cx="${x(a)}" cy="${cy}" r="6"></circle>` +
+      `<circle class="dot new" cx="${x(b)}" cy="${cy}" r="6"></circle>` +
+      `<text class="dval" x="${W}" y="${cy + 4}" text-anchor="end">${a} <tspan class="arrow">&rarr;</tspan> <tspan class="strong">${b} ms</tspan></text>`;
   });
   el.innerHTML =
-    `<svg class="col-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="HTTP/3 share of Firefox requests by Firefox version">` +
-    `<line class="base" x1="0" x2="${W}" y1="${H - padB}" y2="${H - padB}"></line>${s}</svg>`;
+    `<svg class="dumb-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Connection setup time, TCP + TLS vs QUIC: ` +
+    rows.map(([n, a, b]) => `${n} ${a} ms vs ${b} ms`).join(", ") + `">${s}</svg>`;
+}
+
+// HTTP/3 share by Firefox version: a trend, so a line with an area wash, the
+// first and last values labelled, and a crosshair tooltip per version.
+function renderShareLine(el, versions, values) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const padL = 34, padR = 58, padT = 16, padB = 26, H = narrow ? 200 : 220;
+  const max = Math.max(40, Math.ceil(Math.max(...values) / 10) * 10);
+  const n = values.length;
+  const x = (i) => padL + (n > 1 ? (i / (n - 1)) * (W - padL - padR) : 0);
+  const y = (v) => padT + (1 - v / max) * (H - padT - padB);
+  const base = H - padB;
+
+  let s = "";
+  for (let t = 0; t <= max; t += 10) {
+    s += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t}%</text>`;
+  }
+  versions.forEach((v, i) => {
+    if (!narrow || i % 2 === (n - 1) % 2) s += `<text class="ax" x="${x(i)}" y="${H - 7}" text-anchor="middle">${v}</text>`;
+  });
+  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  s += `<path class="sl-area" d="M${x(0)},${base} L${pts.join(" L")} L${x(n - 1)},${base} Z"></path>`;
+  s += `<path class="sl-line" d="M${pts.join(" L")}"></path>`;
+  s += `<line class="sl-cross" x1="0" x2="0" y1="${padT}" y2="${base}" visibility="hidden"></line>`;
+  s += `<circle class="sl-dot" cx="${x(n - 1)}" cy="${y(values[n - 1])}" r="5"></circle>`;
+  s += `<circle class="sl-hover" r="5" cx="0" cy="0" visibility="hidden"></circle>`;
+  s += `<text class="sl-end" x="${x(n - 1) + 10}" y="${y(values[n - 1]) + 5}">${values[n - 1]}%</text>`;
+  s += `<text class="sl-start" x="${x(0)}" y="${y(values[0]) - 10}" text-anchor="start">${values[0]}%</text>`;
+  const slot = n > 1 ? (W - padL - padR) / (n - 1) : W;
+  values.forEach((_, i) => {
+    s += `<rect class="hit" data-i="${i}" x="${x(i) - slot / 2}" y="${padT}" width="${slot}" height="${base - padT}"></rect>`;
+  });
+
+  el.innerHTML =
+    `<div class="trend share"><svg class="share-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
+    `aria-label="HTTP/3 share of Firefox requests by version: ${versions.map((v, i) => `${v} ${values[i]}%`).join(", ")}">${s}</svg>` +
+    `<div class="trend-tip" hidden></div></div>`;
+
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip");
+  const cross = wrap.querySelector(".sl-cross"), dot = wrap.querySelector(".sl-hover");
+  wrap.querySelectorAll("rect.hit").forEach((h) => {
+    const i = +h.dataset.i;
+    const move = (e) => {
+      cross.setAttribute("x1", x(i));
+      cross.setAttribute("x2", x(i));
+      cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", x(i));
+      dot.setAttribute("cy", y(values[i]));
+      dot.setAttribute("visibility", "visible");
+      tip.hidden = false;
+      tip.innerHTML = `<div class="tip-date">Firefox ${versions[i].replace(/^v/, "")}</div><div class="tip-row">HTTP/3<span class="tip-v">${values[i]}%</span></div>`;
+      const box = wrap.getBoundingClientRect();
+      let lx = e.clientX - box.left + 14;
+      if (lx + 170 > box.width) lx = e.clientX - box.left - 170;
+      tip.style.left = Math.max(4, lx) + "px";
+      tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+    };
+    h.addEventListener("mouseenter", move);
+    h.addEventListener("mousemove", move);
+    h.addEventListener("mouseleave", () => {
+      tip.hidden = true;
+      cross.setAttribute("visibility", "hidden");
+      dot.setAttribute("visibility", "hidden");
+    });
+  });
 }
 
 function renderRelease(rel) {
   if (!rel) return;
 
   if (rel.rtt) {
-    const t = document.getElementById("rtt-stats");
-    if (t) {
-      t.innerHTML = "";
-      for (const [k, l] of [["p50", "median"], ["p75", "P75"], ["p95", "P95"], ["p99", "P99"]]) {
-        const c = elem("div", "stat");
-        c.append(elem("div", "n", `${rel.rtt[k]} ms`), elem("div", "l", l));
-        t.append(c);
-      }
-    }
+    const el = document.getElementById("chart-rtt");
+    if (el && rel.rtt.hist) drawSized(() => renderRttHist(el, rel.rtt));
     set(
       "rtt-cap",
-      `Round-trip time of HTTP/3 connections, Firefox ${rel.rtt.version} Release, all platforms. ` +
-        `Source: GLAM: ${GLAM("networking_http_3_rtt", "networking.http_3_rtt")}.`
+      `Round-trip time of HTTP/3 connections, Firefox ${rel.rtt.version} Release, all platforms, ` +
+        `each client weighted equally (as GLAM reports it). Source: GLAM: ` +
+        `${GLAM("networking_http_3_rtt", "networking.http_3_rtt")}.`
     );
   }
 
   if (rel.setup_tcp && rel.setup_quic) {
     const a = rel.setup_tcp, b = rel.setup_quic;
     const el = document.getElementById("chart-setup");
-    if (el) renderPaired(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]], Math.max(a.p95, b.p95));
+    if (el) drawSized(() => renderDumbbell(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]]));
     set(
       "setup-cap",
-      `Connection setup time, desktop page loads to servers that speak HTTP/3, Firefox ${a.version} Release: ` +
-        `TCP + TLS for HTTP/2 vs the QUIC handshake for HTTP/3. Source: GLAM: ` +
+      `Connection setup time, desktop page loads to servers that speak HTTP/3, Firefox ${a.version} Release, ` +
+        `each client weighted equally: TCP + TLS for HTTP/2 vs the QUIC handshake for HTTP/3. Source: GLAM: ` +
         `${GLAM("network_sup_http3_tcp_connection", "network.sup_http3_tcp_connection")}, ` +
         `${GLAM("network_http3_tls_handshake", "network.http3_tls_handshake")}.`
     );
@@ -243,7 +379,7 @@ function renderRelease(rel) {
   const hv = rel.http_version;
   if (hv && hv.h3 && hv.h3.length) {
     const el = document.getElementById("chart-h3-share");
-    if (el) renderColumns(el, hv.versions.map((v) => `v${v}`), hv.h3);
+    if (el) drawSized(() => renderShareLine(el, hv.versions.map((v) => `v${v}`), hv.h3));
     set(
       "h3-share-cap",
       `Share of HTTP responses that came over HTTP/3, Firefox Release, by version. ` +

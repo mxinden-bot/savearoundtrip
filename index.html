@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>savearoundtrip: save a round trip with HTTP/3</title>
-<meta name="description" content="HTTP/3 connects in one round trip less than HTTP/2, and 0-RTT saves another on repeat visits. Offer it on the server: the browser races it and falls back. Check a domain.">
+<meta name="description" content="HTTP/3 connects in one round trip less than HTTP/2, and QUIC 0-RTT saves another on repeat visits. Offer it on the server: the browser races it and falls back. Test a server.">
 <meta property="og:title" content="savearoundtrip">
 <meta property="og:description" content="Save a round trip with HTTP/3. Offer it on the server, the browser races it on the client.">
 <meta property="og:type" content="website">
@@ -35,7 +35,7 @@
     <h1>Save a round trip with <span class="hl">HTTP/3</span>.</h1>
     <p class="lede">
       HTTP/3 runs on QUIC, which sets up a secure connection in one round trip
-      less than TCP and TLS. On a repeat visit, 0-RTT puts the request in the
+      less than TCP and TLS. On a repeat visit, QUIC 0-RTT puts the request in the
       very first packet. Offer HTTP/3 on the server, and the browser races it
       on the client, falling back where it does not work.
     </p>
@@ -92,7 +92,7 @@
     <p>
       Before the first byte of a response arrives, every new connection pays
       round trips for its handshakes. QUIC folds the transport and the TLS
-      handshake into one, so HTTP/3 saves a round trip. 0-RTT saves another on
+      handshake into one, so HTTP/3 saves a round trip. QUIC 0-RTT saves another on
       a repeat visit.
     </p>
     <div class="rt-grid">
@@ -114,15 +114,14 @@
       TCP has 0-RTT too, but the TCP handshake still costs a round trip first.
     </p>
 
-    <h3>what one round trip costs</h3>
-    <div class="statgrid" id="rtt-stats"></div>
-    <p>For the slowest users, every round trip saved is a visible difference.</p>
+    <h3>What one round trip costs</h3>
+    <div id="chart-rtt"></div>
     <p class="chart-cap" id="rtt-cap"></p>
     <div id="pageload-viz" class="plviz" hidden></div>
 
     <h3>QUIC connects in about half the time</h3>
-    <div id="chart-setup" class="bars"></div>
-    <div class="legend"><span class="legend-item"><span class="legend-dot c-old"></span>TCP + TLS (HTTP/2)</span><span class="legend-item"><span class="legend-dot c-new"></span>QUIC (HTTP/3)</span></div>
+    <div id="chart-setup"></div>
+    <div class="legend"><span class="legend-item"><span class="legend-dot round c-old"></span>TCP + TLS (HTTP/2)</span><span class="legend-item"><span class="legend-dot round c-new"></span>QUIC (HTTP/3)</span></div>
     <p class="chart-cap" id="setup-cap"></p>
   </section>
 
@@ -137,7 +136,7 @@
       (<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1734110">bug 1734110</a>),
       and some networks block UDP
       (<a href="https://www.rfc-editor.org/rfc/rfc9308#section-3.1">RFC 9308</a>).
-      Across Meta's apps and sites, QUIC works
+      QUIC works
       <a href="https://www.mail-archive.com/quic@ietf.org/msg03313.html">97%+ of the time</a>.
       Which protocol works depends on the user's network. The site cannot know.
     </p>
@@ -151,7 +150,7 @@
     </p>
     <p class="mantra">Offer HTTP/3 without risk: where it breaks, the browser falls back.</p>
 
-    <h3>more HTTP/3, faster first paint</h3>
+    <h3>More HTTP/3, faster first paint</h3>
     <div class="bars">
       <div class="bar-row"><span class="bar-label">control</span><span class="bar-track"><span class="bar-fill c-old" style="width:19.6%"></span></span><span class="bar-val">19.6%</span></div>
       <div class="bar-row"><span class="bar-label">Happy Eyeballs v3</span><span class="bar-track"><span class="bar-fill c-new" style="width:24.6%"></span></span><span class="bar-val">24.6%</span></div>
@@ -168,7 +167,7 @@
       <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1953459">bug 1953459</a>.
     </p>
 
-    <h3>the internet cannot switch all at once</h3>
+    <h3>The internet cannot switch all at once</h3>
     <div id="chart-adopt" class="bars"></div>
     <p class="quote">"Transition is easiest when changing only one entity still benefits that entity."
       <a href="https://www.rfc-editor.org/rfc/rfc8170#section-1">RFC 8170</a></p>
@@ -221,7 +220,7 @@
       (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
     </p>
 
-    <h3>recommended: publish the HTTPS record too</h3>
+    <h3>Recommended: publish the HTTPS record too</h3>
     <p>Keep sending <code>Alt-Svc</code>, and add the record. It does more than the header can:</p>
     <ul class="tick">
       <li><b>HTTP/3 before the first connection</b>, not after it.</li>
@@ -260,7 +259,7 @@
     <div id="chart-h3-share"></div>
     <p class="chart-cap" id="h3-share-cap"></p>
 
-    <h3>how Firefox learns about HTTP/3</h3>
+    <h3>How Firefox learns that a server supports HTTP/3</h3>
     <p class="dim">
       <span class="badge">Firefox Nightly</span>
       Each connection, by how the server advertised HTTP/3:
@@ -280,20 +279,20 @@
     <h2>offer HTTP/3</h2>
     <p>What the checklist above asks for, and how.</p>
 
-    <h3 id="offer-h3">1 · turn on HTTP/3</h3>
+    <h3 id="offer-h3">1 · Turn on HTTP/3</h3>
     <p>
       On the server or the CDN. QUIC runs over UDP, so open UDP port 443 in the
       firewall. Keep HTTP/2 on: it is the fallback.
     </p>
 
-    <h3 id="offer-altsvc">2 · send <code>Alt-Svc</code></h3>
+    <h3 id="offer-altsvc">2 · Send <code>Alt-Svc</code></h3>
     <pre><code><span class="tok-key">Alt-Svc:</span> <span class="tok-val">h3=":443"; ma=86400</span></code></pre>
     <p class="dim">
       HTTP/3 on port 443 of the same host; the browser may remember it for a day
       (<code>ma</code>, in seconds).
     </p>
 
-    <h3 id="offer-rr">3 · publish an HTTPS DNS record</h3>
+    <h3 id="offer-rr">3 · Publish an HTTPS DNS record</h3>
     <p>A ServiceMode record advertising HTTP/3, with address hints:</p>
     <pre><code><span class="tok-com">; zone file (BIND-style)</span>
 example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
@@ -311,7 +310,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       the HTTPS record type directly.
     </p>
 
-    <h3 id="offer-0rtt">4 · turn on 0-RTT</h3>
+    <h3 id="offer-0rtt">4 · Turn on 0-RTT</h3>
     <p>
       Often a single switch: <code>ssl_early_data on;</code> in
       <a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data">nginx</a>,
@@ -337,7 +336,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       Per-connection estimate reconstructed from GLAM's histograms, so approximate.
     </p>
 
-    <h3>by resolver: DoH vs native</h3>
+    <h3>By resolver: DoH vs native</h3>
     <p class="dim" id="resolver-mix"></p>
     <div id="chart-feat-resolver"></div>
     <p class="chart-cap">
@@ -378,22 +377,13 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <a href="https://chromestatus.com/feature/5154357283651584">Chrome</a>
       its own built-in resolver (over DoH or plain DNS), and
       <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1721132">Firefox</a>
-      either.
+      either the operating-system resolver or its own DNS-over-HTTPS resolver.
     </p>
 
     <h3>Should I drop the <code>Alt-Svc</code> header?</h3>
     <p>
       No. Keep it as a fallback for clients that did not get the HTTPS record:
       older clients, and resolvers or networks that do not deliver it.
-    </p>
-
-    <h3>Is 0-RTT safe?</h3>
-    <p>
-      For requests that are safe to repeat. Early data has no replay
-      protection, so a network attacker can resend it. Servers accept it for
-      such requests and answer the rest with <code>425 Too Early</code>, which
-      the browser can retry after the handshake
-      (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
     </p>
   </section>
 

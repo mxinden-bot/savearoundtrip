@@ -97,9 +97,9 @@
       : ``;
     const rttLine = rtt
       ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. ` +
-        `HTTP/3 saves one of those on a new connection, and 0-RTT another on a ` +
+        `HTTP/3 saves one of those on a new connection, and QUIC 0-RTT another on a ` +
         `repeat visit.`
-      : ` HTTP/3 saves a round trip on a new connection, and 0-RTT another on a ` +
+      : ` HTTP/3 saves a round trip on a new connection, and QUIC 0-RTT another on a ` +
         `repeat visit.`;
 
     el.innerHTML =

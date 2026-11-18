@@ -200,13 +200,25 @@ async function releaseShare(probe, labels) {
 }
 
 // Percentiles of a (labeled) distribution for the newest settled version.
-async function releasePercentiles(probe, metricKey, scale) {
+// GLAM's percentiles weight every client equally (they come from its
+// client-normalized histogram, not the per-request one). With `withHist`, also
+// return that same histogram as [bucket lower bound, share %], so a chart of
+// the distribution agrees with the percentiles drawn on it.
+async function releasePercentiles(probe, metricKey, scale, withHist = false) {
   const rows = (await query(probe, "version", "release")).filter((r) => (r.metric_key || "") === metricKey && r.percentiles);
   const byV = new Map(rows.map((r) => [r.version, r]));
   const v = settledVersions(byV).pop();
-  const p = byV.get(v).percentiles;
+  const row = byV.get(v);
+  const p = row.percentiles;
   const ms = (k) => Math.round(p[k] * scale);
-  return { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
+  const out = { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
+  if (withHist) {
+    const h = row.histogram || {};
+    const ks = Object.keys(h).map(Number).sort((a, b) => a - b);
+    const tot = ks.reduce((s, k) => s + h[k], 0);
+    out.hist = ks.map((k) => [k * scale, tot ? Math.round((10000 * h[k]) / tot) / 100 : 0]);
+  }
+  return out;
 }
 
 async function fetchRelease(prev) {
@@ -214,7 +226,7 @@ async function fetchRelease(prev) {
   const tasks = {
     http_version: () => releaseHttpVersion(),
     // smoothed RTT of HTTP/3 connections, in ms
-    rtt: () => releasePercentiles("networking_http_3_rtt", "", 1),
+    rtt: () => releasePercentiles("networking_http_3_rtt", "", 1, true),
     // connection setup to servers that speak HTTP/3, page loads (ns -> ms):
     // TCP + TLS for HTTP/2, vs the QUIC handshake for HTTP/3
     setup_tcp: () => releasePercentiles("network_sup_http3_tcp_connection", "supports_http3_page", 1e-6),
