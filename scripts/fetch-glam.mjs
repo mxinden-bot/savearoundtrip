@@ -6,8 +6,8 @@
 // - Firefox NIGHTLY: the two Happy Eyeballs probes (HTTP/3 discovery, HTTPS
 //   record features), the only channel carrying them today.
 // - Firefox RELEASE: HTTP version share, HTTP/3 round-trip time, connection
-//   setup time (TCP + TLS vs QUIC), IPv6 and TLS 1.3 share. Each of these is
-//   best-effort on its own: on failure the previous value is kept.
+//   setup time (TCP + TLS vs QUIC). Each of these is best-effort on its own:
+//   on failure the previous value is kept.
 //
 // The GLAM HTTP API is undocumented and meant for GLAM's own frontend, so this
 // is best-effort: on any failure we exit non-zero and write nothing, leaving
@@ -192,25 +192,7 @@ async function releaseHttpVersion() {
   };
 }
 
-async function releaseShare(probe, labels) {
-  const byV = labeledByVersion(await query(probe, "version", "release"));
-  const v = settledVersions(byV).pop();
-  const s = labelShares(byV.get(v));
-  return { version: String(v), share: round(labels.reduce((a, l) => a + s(l), 0)) };
-}
-
 // Percentiles of a (labeled) distribution for the newest settled version.
-// Percentiles of a (labeled) distribution for the newest settled version, as
-// GLAM reports them (each client weighted equally).
-async function releasePercentiles(probe, metricKey, scale) {
-  const rows = (await query(probe, "version", "release")).filter((r) => (r.metric_key || "") === metricKey && r.percentiles);
-  const byV = new Map(rows.map((r) => [r.version, r]));
-  const v = settledVersions(byV).pop();
-  const p = byV.get(v).percentiles;
-  const ms = (k) => Math.round(p[k] * scale);
-  return { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
-}
-
 // HTTP/3 round-trip time pooled over all connections (GLAM's non-normalized
 // histogram), as a cumulative curve: the share of connections at or below each
 // bucket's upper bound, in ms. Percentiles are read off the same curve.
@@ -231,24 +213,46 @@ async function releaseRttCdf() {
   return { version: String(v), p50: at(50), p75: at(75), p95: at(95), p99: at(99), cdf };
 }
 
+// Connection setup time to servers that speak HTTP/3, desktop page loads,
+// pooled over connections: TCP + TLS for HTTP/2 vs the QUIC handshake for
+// HTTP/3, each as a cumulative curve [upper bound in ms, share %] (ns -> ms).
+async function releaseSetupCdf() {
+  const curve = async (probe, key) => {
+    const rows = (await query(probe, "version", "release")).filter((r) => r.metric_key === key && r.non_norm_histogram);
+    const byV = new Map(rows.map((r) => [r.version, r]));
+    const v = settledVersions(byV).pop();
+    const h = byV.get(v).non_norm_histogram;
+    const ks = Object.keys(h).map(Number).sort((a, b) => a - b);
+    const tot = ks.reduce((t, k) => t + h[k], 0);
+    let c = 0;
+    const cdf = [];
+    ks.forEach((k, i) => {
+      c += h[k];
+      if (i + 1 < ks.length) cdf.push([Math.round(ks[i + 1] / 1e4) / 100, Math.round((10000 * c) / tot) / 100]);
+    });
+    const at = (q) => (cdf.find((p) => p[1] >= q) || cdf[cdf.length - 1])[0];
+    return { version: String(v), p50: at(50), p95: at(95), cdf: cdf.filter(([ms]) => ms >= 1 && ms <= 6000) };
+  };
+  const tcp = await curve("network_sup_http3_tcp_connection", "supports_http3_page");
+  const quic = await curve("network_http3_tls_handshake", "uses_http3_page");
+  return { version: tcp.version, tcp, quic };
+}
+
 async function fetchRelease(prev) {
-  const out = { ...(prev || {}) };
+  const out = {};
   const tasks = {
     http_version: () => releaseHttpVersion(),
-    // smoothed RTT of HTTP/3 connections, in ms
     // HTTP/3 round-trip time per connection, in ms
     rtt: () => releaseRttCdf(),
-    // connection setup to servers that speak HTTP/3, page loads (ns -> ms):
-    // TCP + TLS for HTTP/2, vs the QUIC handshake for HTTP/3
-    setup_tcp: () => releasePercentiles("network_sup_http3_tcp_connection", "supports_http3_page", 1e-6),
-    setup_quic: () => releasePercentiles("network_http3_tls_handshake", "uses_http3_page", 1e-6),
-    ipv6: () => releaseShare("networking_connection_address_type", ["http_1_ipv6", "http_2_ipv6", "http_3_ipv6"]),
-    tls13: () => releaseShare("tls_handshake_version", ["tls1.3"]),
+    // connection setup to servers that speak HTTP/3, page loads: TCP + TLS for
+    // HTTP/2 vs the QUIC handshake for HTTP/3, per connection
+    setup_cdf: () => releaseSetupCdf(),
   };
   for (const [k, fn] of Object.entries(tasks)) {
     try {
       out[k] = await fn();
     } catch (e) {
+      if (prev?.[k]) out[k] = prev[k];
       console.warn(`  release.${k}: ${e.message}, kept previous value`);
     }
   }

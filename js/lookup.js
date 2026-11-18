@@ -426,14 +426,14 @@ function factList() {
 
 const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">no</span>`);
 
-/* ---- the checklist: what a domain offers browsers for HTTP/3 ---- */
+/* ---- the checklist: what a domain advertises to browsers for HTTP/3 ---- */
 
 // [key, item, what to do when missing, how-to anchor]
 const CHECKLIST = [
-  ["h3", "Serves HTTP/3", "Turn on HTTP/3 on the server or CDN, with UDP port 443 open.", "offer-h3"],
-  ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code>.`, "offer-altsvc"],
-  ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "offer-rr"],
-  ["zerortt", "Offers 0-RTT for repeat visits", "Turn on TLS early data.", "offer-0rtt"],
+  ["h3", "Serves HTTP/3", "Enable HTTP/3 next to HTTP/2, with UDP port 443 open.", "step-h3"],
+  ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code> on every response.`, "step-altsvc"],
+  ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "step-rr"],
+  ["zerortt", "QUIC 0-RTT for repeat visits", "Enable QUIC 0-RTT.", "step-0rtt"],
 ];
 const MARK = { ok: "✓", todo: "✗", na: "–", unknown: "?", pending: "" };
 
@@ -565,7 +565,7 @@ function h3Box(d, domain, rrHasH3, hintShown) {
     row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
   if (d.zero_rtt) {
     row("Session resumption", yn(d.zero_rtt.ticket_issued));
-    row("0-RTT offered", yn(d.zero_rtt.early_data));
+    row("0-RTT enabled", yn(d.zero_rtt.early_data));
   }
   v.append(facts);
   if (d.transport_params && Object.keys(d.transport_params).length)

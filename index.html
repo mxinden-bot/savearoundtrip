@@ -25,8 +25,8 @@
       <a href="#round-trips">round trips</a>
       <a href="#race">clients race</a>
       <a href="#signals">servers advertise</a>
-      <a href="#data">data</a>
-      <a href="#publish">what to offer</a>
+      <a href="#data">telemetry</a>
+      <a href="#publish">enable</a>
       <a href="#faq">faq</a>
     </nav>
   </header>
@@ -60,7 +60,7 @@
 
   <!-- CHECK -->
   <section id="check">
-    <h2>check your server</h2>
+    <h2>Check your server</h2>
     <p class="dim">Does it serve HTTP/3, and do browsers know? Enter a domain.</p>
     <div class="tool">
       <form id="lookup-form">
@@ -97,7 +97,7 @@
 
   <!-- ROUND TRIPS -->
   <section id="round-trips">
-    <h2>one round trip less</h2>
+    <h2>One round trip less</h2>
     <p>
       Every new connection pays round trips for its handshakes before the
       request can go out. HTTP/2 runs on TCP and TLS: one handshake each. HTTP/3
@@ -131,13 +131,13 @@
 
     <h3>QUIC connects in about half the time</h3>
     <div id="chart-setup"></div>
-    <div class="legend"><span class="legend-item"><span class="legend-dot c-old"></span>TCP + TLS (HTTP/2)</span><span class="legend-item"><span class="legend-dot c-new"></span>QUIC (HTTP/3)</span></div>
+    <div class="legend"><span class="legend-item"><span class="legend-dot c-old"></span>TCP + TLS (HTTP/2), median&nbsp;<b id="setup-med-tcp"></b></span><span class="legend-item"><span class="legend-dot c-new"></span>QUIC (HTTP/3), median&nbsp;<b id="setup-med-quic"></b></span></div>
     <p class="chart-cap" id="setup-cap"></p>
   </section>
 
   <!-- RACE -->
   <section id="race">
-    <h2>clients race</h2>
+    <h2>Clients race</h2>
     <p>
       HTTP/3 is faster, but it does not work everywhere. Antivirus software
       inspects it and breaks it
@@ -150,95 +150,97 @@
       QUIC works <a href="https://www.mail-archive.com/quic@ietf.org/msg03313.html">97%+ of the time</a>.
     </p>
 
-    <h3>The internet cannot switch all at once</h3>
-    <div id="chart-adopt" class="bars"></div>
-    <p class="quote">"Transition is easiest when changing only one entity still benefits that entity."</p>
-    <p class="quote">"Transition is easiest when the benefits come to those bearing the costs."
-      <a href="https://www.rfc-editor.org/rfc/rfc8170#section-1">RFC 8170</a></p>
-    <p>
-      TLS 1.3 got there that way: a client offers it, a server that supports it
-      gains right away, and everyone else falls back to TLS 1.2. HTTP/3 works
-      the same way.
-    </p>
-    <p class="chart-cap" id="adopt-cap"></p>
-
     <h3>Happy Eyeballs: race the options</h3>
+    <p class="opts">A, AAAA or HTTPS record &middot; IPv4 or IPv6 &middot; TCP + TLS or QUIC &middot; HTTP/1.1, 2 or 3 &middot; with or without ECH</p>
     <p>
-      IPv4 or IPv6, TCP or QUIC: which one works depends on the user's network.
-      Usually, QUIC connects first.
+      Which option works depends on the user's network, so the browser races
+      them: <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a>.
+      Usually, QUIC connects first:
     </p>
     <div id="race-usual" class="race"></div>
-    <p>When QUIC is blocked, the next attempt starts after a short delay, and TCP connects.</p>
+    <p>When QUIC is blocked, the next attempts start after a short delay, and TCP connects:</p>
     <div id="race-blocked" class="race"></div>
-    <p class="mantra">Usually the new protocol wins. Where it is blocked, the browser falls back to the old one, so it stays safe.</p>
     <p class="chart-cap">
-      Illustrative. Each new attempt starts after a delay (50 ms, then 150 ms
-      after the first), or right away when an earlier one fails.
+      Simplified. Order and delays as in Firefox: attempts start 0, 50, 150 and
+      350 ms after the first. Click a diagram to replay it.
     </p>
     <p>
       <b>Why "Happy Eyeballs"?</b> Eyeballs is network operator slang for users:
-      the people looking at the screen. Happy eyeballs are users who never wait
-      on a broken path. It started in 2012 with IPv6, with IPv4 as the fallback
-      (<a href="https://www.rfc-editor.org/rfc/rfc6555">RFC 6555</a>, then
-      <a href="https://www.rfc-editor.org/rfc/rfc8305">RFC 8305</a>).
-      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a>
-      adds HTTP/3, with HTTP/2 as the fallback. In Firefox it is on in Nightly
-      and for 50% of Release.
+      the people looking at the screen. Eyeballs are latency sensitive, and
+      often on lossy, bad networks.
     </p>
 
-    <h3>More page loads over HTTP/3, faster paint</h3>
+    <h3>With Happy Eyeballs: more page loads over HTTP/3</h3>
     <div class="bars">
-      <div class="bar-row"><span class="bar-label">control</span><span class="bar-track"><span class="bar-fill c-old" style="width:19.6%"></span></span><span class="bar-val">19.6%</span></div>
-      <div class="bar-row"><span class="bar-label">Happy Eyeballs v3</span><span class="bar-track"><span class="bar-fill c-new" style="width:24.6%"></span></span><span class="bar-val">24.6%</span></div>
+      <div class="bar-row"><span class="bar-label">control</span><span class="bar-track"><span class="bar-fill c-old" style="width:20.1%"></span></span><span class="bar-val">20.1%</span></div>
+      <div class="bar-row"><span class="bar-label">Happy Eyeballs v3</span><span class="bar-track"><span class="bar-fill c-new" style="width:25.6%"></span></span><span class="bar-val">25.6%</span></div>
     </div>
-    <p>
-      With Happy Eyeballs v3, a quarter more page loads use HTTP/3. First
-      contentful paint is faster at every percentile: median
-      <b>661 ms to 643 ms</b>, P99 <b>11.2 s to 10.8 s</b>. Largest contentful
-      paint is faster too: median <b>941 ms to 928 ms</b>.
-    </p>
     <p class="chart-cap">
       Share of page loads whose main document came over HTTP/3, on a new
-      connection. Firefox 160 Release experiment, 5 to 13 November 2026:
-      7.7M page loads (control) and 8.0M (Happy Eyeballs v3). Tracking:
+      connection. Firefox 158 to 160 Release experiment: 98.6M page loads
+      (control) and 102.2M (Happy Eyeballs v3). Tracking:
       <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1953459">bug 1953459</a>.
+    </p>
+    <p>
+      That is one browser racing better. It can only reach HTTP/3 where the
+      server advertises it: a server that enables HTTP/3 and publishes an HTTPS
+      record changes it for all its clients at once.
+    </p>
+
+    <h3>Faster first and largest contentful paint</h3>
+    <div id="chart-change"></div>
+    <div class="legend"><span class="legend-item"><span class="legend-dot c-fcp"></span>first contentful paint (FCP)</span><span class="legend-item"><span class="legend-dot c-lcp"></span>largest contentful paint (LCP)</span></div>
+    <p>
+      FCP median <b>648 ms to 632 ms</b>, P99 <b>8.2 s to 7.9 s</b>, faster at
+      every percentile. LCP median <b>875 ms to 865 ms</b>, P99 <b>13.3 s to
+      12.9 s</b>, slightly slower below about P18.
+    </p>
+    <p class="chart-cap">
+      Happy Eyeballs v3 vs control, page loads on a new connection, Firefox 158
+      and 159 Release experiment: 73.9M and 77.1M page loads (FCP), 81.8M and
+      84.9M (LCP, at page load). P50 to P99: every 95% confidence interval
+      excludes zero.
     </p>
   </section>
 
   <!-- SIGNALS -->
   <section id="signals">
-    <h2>servers advertise</h2>
+    <h2>Servers advertise</h2>
     <p>
       The browser can only race HTTP/3 if it knows the server supports it.
-      Servers advertise it in two ways, plus QUIC 0-RTT for the repeat visit.
+      Servers advertise HTTP/3 in two ways, and they differ in when the browser
+      learns about it:
     </p>
+    <table class="adv">
+      <thead><tr><th></th><th>1st connection</th><th>2nd</th><th>3rd</th><th>&hellip;</th></tr></thead>
+      <tbody>
+        <tr><td><b>1. <code>Alt-Svc</code> header</b><span>in the HTTP response</span></td><td><span class="c old">HTTP/2</span></td><td><span class="c new">HTTP/3</span></td><td><span class="c new">HTTP/3</span></td><td><span class="c new more">HTTP/3</span></td></tr>
+        <tr><td><b>2. HTTPS DNS record</b><span>in DNS, before connecting</span></td><td><span class="c new">HTTP/3</span></td><td><span class="c new">HTTP/3</span></td><td><span class="c new">HTTP/3</span></td><td><span class="c new more">HTTP/3</span></td></tr>
+      </tbody>
+    </table>
 
-    <div class="seq">
-      <div class="seqcol bad">
-        <h4><code>Alt-Svc</code> HTTP header</h4>
-        <div id="seq-altsvc" class="seqbox"></div>
-        <div class="verdict">HTTP/3 from the second connection on.</div>
-      </div>
-      <div class="seqcol good">
-        <h4>HTTPS DNS record</h4>
-        <div id="seq-https" class="seqbox"></div>
-        <div class="verdict">HTTP/3 on the first connection.</div>
-      </div>
-    </div>
-
+    <h3>1 · <code>Alt-Svc</code> header: HTTP/3 from the second connection</h3>
     <p>
-      <b><code>Alt-Svc</code></b> (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>)
-      is an HTTP response header. The browser reads it only after a first
-      connection over TCP, so HTTP/3 starts on the next one.
-    </p>
-    <p>
-      An <b>HTTPS DNS record</b> (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
-      carries the same signal in the DNS. The browser looks it up alongside the
-      A and AAAA records, before it connects, so even the first connection can
-      use HTTP/3.
+      The server advertises HTTP/3 in an HTTP response header
+      (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>). The
+      browser only learns about it from that response, so the
+      <b>first connection is HTTP/2</b>. HTTP/3 starts with the
+      <b>second connection</b>.
     </p>
 
-    <h3>QUIC 0-RTT for the repeat visit</h3>
+    <h3>2 · HTTPS DNS record: HTTP/3 on the very first connection</h3>
+    <p>
+      The HTTPS record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
+      says the same in DNS. The browser looks it up together with the A and
+      AAAA records, before it connects. DNS already says the server speaks
+      HTTP/3, so the <b>very first connection is HTTP/3</b> too.
+    </p>
+    <p>
+      Do both: the HTTPS record for the first connection, <code>Alt-Svc</code>
+      for browsers that do not look up HTTPS records.
+    </p>
+
+    <h3>3 · QUIC 0-RTT for the repeat visit</h3>
     <p>
       After an HTTP/3 connection, the server can hand the browser a session
       ticket that allows early data. On the next visit, the request goes out in
@@ -246,10 +248,9 @@
       (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
     </p>
 
-    <h3>Recommended: publish the HTTPS record too</h3>
-    <p>Keep sending <code>Alt-Svc</code>, and add the record. It does more than the header can:</p>
+    <h3>The HTTPS record does more</h3>
+    <p>Beyond HTTP/3 on the first connection, it carries what a header can't:</p>
     <ul class="tick">
-      <li><b>HTTP/3 before the first connection</b>, not after it.</li>
       <li><b>ECH.</b> The record carries the keys that encrypt the TLS ClientHello,
         including the server name (<a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849</a>).
         A header can't: the key is needed before the first connection.</li>
@@ -274,7 +275,7 @@
 
   <!-- DATA -->
   <section id="data">
-    <h2>from a real browser</h2>
+    <h2>Telemetry</h2>
     <p>
       Firefox measures all of this. The numbers on this page come from Mozilla's
       public <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry and
@@ -302,24 +303,23 @@
 
   <!-- PUBLISH -->
   <section id="publish">
-    <h2>what to offer</h2>
+    <h2>Enable and advertise</h2>
     <p>What the checklist above asks for, and how.</p>
 
-    <h3 id="offer-h3">1 · Serve HTTP/3, alongside HTTP/1.1 and HTTP/2</h3>
+    <h3 id="step-h3">1 · Enable HTTP/3, next to HTTP/2</h3>
     <p>
       On the server or the CDN that browsers connect to. QUIC runs over UDP, so
-      open UDP port 443 in the firewall. HTTP/1.1 and HTTP/2 stay on: they are
-      the fallback.
+      open UDP port 443 in the firewall. HTTP/2 stays on: it is the fallback.
     </p>
 
-    <h3 id="offer-altsvc">2 · Send an <code>Alt-Svc</code> header on all of them</h3>
+    <h3 id="step-altsvc">2 · Send <code>Alt-Svc</code> on every response</h3>
     <pre><code><span class="tok-key">Alt-Svc:</span> <span class="tok-val">h3=":443"; ma=86400</span></code></pre>
     <p class="dim">
       HTTP/3 on port 443 of the same host; the browser may remember it for a day
       (<code>ma</code>, in seconds).
     </p>
 
-    <h3 id="offer-rr">3 · Publish an HTTPS record with <code>alpn="h3"</code></h3>
+    <h3 id="step-rr">3 · Publish an HTTPS record with <code>alpn="h3"</code></h3>
     <p>A ServiceMode record advertising HTTP/3, with address hints:</p>
     <pre><code><span class="tok-com">; zone file (BIND-style)</span>
 example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
@@ -333,7 +333,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the browser can start connecting to right away.</li>
     </ul>
 
-    <h3 id="offer-0rtt">4 · Offer QUIC 0-RTT</h3>
+    <h3 id="step-0rtt">4 · Enable QUIC 0-RTT</h3>
     <p>
       Often a single switch: <code>ssl_early_data on;</code> in
       <a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data">nginx</a>,
@@ -342,7 +342,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       repeat (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
     </p>
 
-    <h3 id="support">Your frontend most likely supports it</h3>
+    <h3 id="support">Most servers and CDNs already support it</h3>
     <div class="sup">
       <table class="cmp sup-t">
         <thead><tr><th>Server, proxy</th><th>HTTP/3</th><th>0-RTT</th></tr></thead>
@@ -350,22 +350,22 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
           <tr><td><a href="https://caddyserver.com/docs/caddyfile/options">Caddy</a></td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
           <tr><td><a href="https://docs.litespeedtech.com/lsws/cp/cpanel/quic-http3/">LiteSpeed</a></td><td class="s-y">yes</td><td class="s-u">?</td></tr>
           <tr><td><a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/http/http3">Envoy</a></td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
-          <tr><td><a href="https://www.haproxy.com/blog/announcing-haproxy-2-8">HAProxy</a></td><td class="s-y">yes</td><td class="s-o">opt-in</td></tr>
+          <tr><td><a href="https://www.haproxy.com/blog/announcing-haproxy-2-8">HAProxy</a></td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
           <tr><td><a href="https://h2o.examp1e.net/configure/http3_directives.html">H2O</a></td><td class="s-y">yes</td><td class="s-u">?</td></tr>
-          <tr><td><a href="https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/">Traefik</a></td><td class="s-o">opt-in</td><td class="s-y">yes</td></tr>
-          <tr><td><a href="https://techcommunity.microsoft.com/blog/networkingblog/enabling-http3-support-on-windows-server-2022/2676880">IIS</a></td><td class="s-o">opt-in</td><td class="s-u">?</td></tr>
-          <tr><td><a href="https://nginx.org/en/docs/http/ngx_http_v3_module.html">nginx</a></td><td class="s-o">experimental</td><td class="s-o">opt-in</td></tr>
+          <tr><td><a href="https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/">Traefik</a></td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
+          <tr><td><a href="https://techcommunity.microsoft.com/blog/networkingblog/enabling-http3-support-on-windows-server-2022/2676880">IIS</a></td><td class="s-y">yes</td><td class="s-u">?</td></tr>
+          <tr><td><a href="https://nginx.org/en/docs/http/ngx_http_v3_module.html">nginx</a></td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
           <tr><td><a href="https://www.apache.org/dist/httpd/CHANGES_2.4">Apache httpd</a></td><td class="s-n">no</td><td class="s-n">no</td></tr>
         </tbody>
       </table>
       <table class="cmp sup-t">
         <thead><tr><th>CDN</th><th>HTTP/3</th><th>0-RTT</th><th>HTTPS record</th></tr></thead>
         <tbody>
-          <tr><td><a href="https://developers.cloudflare.com/speed/optimization/protocol/http3/">Cloudflare</a></td><td class="s-o">opt-in</td><td class="s-o">opt-in</td><td class="s-y">automatic</td></tr>
-          <tr><td><a href="https://techdocs.akamai.com/property-mgr/docs/http3-support">Akamai</a></td><td class="s-o">opt-in</td><td class="s-o">opt-in</td><td class="s-o">opt-in</td></tr>
-          <tr><td><a href="https://aws.amazon.com/about-aws/whats-new/2025/07/amazon-cloudfront-https-dns-records">CloudFront</a></td><td class="s-o">opt-in</td><td class="s-u">?</td><td class="s-y">via Route 53</td></tr>
-          <tr><td><a href="https://cloud.google.com/load-balancing/docs/https">Google Cloud</a></td><td class="s-y">yes</td><td class="s-o">opt-in</td><td class="s-u">?</td></tr>
-          <tr><td><a href="https://www.fastly.com/documentation/guides/full-site-delivery/performance/enabling-http3-for-fastly-services/">Fastly</a></td><td class="s-o">opt-in</td><td class="s-y">yes</td><td class="s-n">no</td></tr>
+          <tr><td><a href="https://developers.cloudflare.com/speed/optimization/protocol/http3/">Cloudflare</a></td><td class="s-y">yes</td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
+          <tr><td><a href="https://techdocs.akamai.com/property-mgr/docs/http3-support">Akamai</a></td><td class="s-y">yes</td><td class="s-y">yes</td><td class="s-y">yes</td></tr>
+          <tr><td><a href="https://aws.amazon.com/about-aws/whats-new/2025/07/amazon-cloudfront-https-dns-records">CloudFront</a></td><td class="s-y">yes</td><td class="s-u">?</td><td class="s-y">yes</td></tr>
+          <tr><td><a href="https://cloud.google.com/load-balancing/docs/https">Google Cloud</a></td><td class="s-y">yes</td><td class="s-y">yes</td><td class="s-u">?</td></tr>
+          <tr><td><a href="https://www.fastly.com/documentation/guides/full-site-delivery/performance/enabling-http3-for-fastly-services/">Fastly</a></td><td class="s-y">yes</td><td class="s-y">yes</td><td class="s-n">no</td></tr>
           <tr><td><a href="https://learn.microsoft.com/en-us/azure/frontdoor/front-door-faq">Azure Front Door</a></td><td class="s-n">no</td><td class="s-n">no</td><td class="s-n">no</td></tr>
           <tr><td><a href="https://community.vercel.com/t/how-do-i-get-http-3-enabled-on-my-site/11723">Vercel</a></td><td class="s-n">no</td><td class="s-n">no</td><td class="s-n">no</td></tr>
         </tbody>
@@ -383,16 +383,15 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       Not yet: <a href="https://learn.microsoft.com/en-us/azure/dns/dns-zones-records">Azure DNS</a>.
     </p>
     <p class="chart-cap">
-      Surveyed 17 November 2026 from vendor documentation. yes = on by default
-      or always available; opt-in = you turn it on; ? = no vendor statement
-      found. Only the server that browsers connect to matters, not the origin
-      behind it.
+      Surveyed 17 November 2026 from vendor documentation. yes = supported, on
+      by default or as an option; ? = no vendor statement found. Only the
+      server that browsers connect to matters, not the origin behind it.
     </p>
   </section>
 
   <!-- RECORDS -->
   <section id="records">
-    <h2>what HTTPS records carry in the wild</h2>
+    <h2>What HTTPS records carry in the wild</h2>
     <p class="dim">
       <span class="badge">Firefox Nightly</span>
       Of the connections where Firefox saw an HTTPS record, the share whose
@@ -415,7 +414,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
 
   <!-- FAQ -->
   <section id="faq">
-    <h2>faq</h2>
+    <h2>FAQ</h2>
 
     <h3>Can turning on HTTP/3 break a site?</h3>
     <p>
@@ -427,9 +426,9 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     <h3>Does my CDN do this automatically?</h3>
     <p>
       Partly. Cloudflare publishes the HTTPS record automatically, CloudFront
-      through Route&nbsp;53; most CDNs need HTTP/3 or 0-RTT turned on. The
+      through Route&nbsp;53; several CDNs need HTTP/3 turned on. The
       <a href="#support">support table</a> above has the details, and the
-      <a href="#check">checker</a> shows what a domain offers today.
+      <a href="#check">checker</a> shows what a domain advertises today.
     </p>
 
     <h3>Will an HTTPS record break older clients?</h3>
@@ -472,8 +471,7 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
       <a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460 SVCB/HTTPS</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838 Alt-Svc</a> ·
       <a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470 early data</a> ·
-      <a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849 ECH</a> ·
-      <a href="https://www.rfc-editor.org/rfc/rfc8170">RFC 8170 protocol transitions</a>
+      <a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849 ECH</a>
     </div>
   </footer>
 
@@ -502,7 +500,6 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
   // The handshake diagrams, the same as on the performance.now() 2026 slides.
   (function () {
     var CS = [{ id: "C", label: "Client" }, { id: "S", label: "Server" }];
-    var CDS = [{ id: "C", label: "Client" }, { id: "D", label: "DNS" }, { id: "S", label: "Server" }];
     Seq.register("seq-tls13", { actors: CS, label: "TCP plus TLS 1.3: three round trips", messages: [
       { from: "C", to: "S", text: "TCP SYN" }, { from: "S", to: "C", text: "SYN-ACK", dashed: true },
       { from: "C", to: "S", text: "TLS ClientHello" }, { from: "S", to: "C", text: "ServerHello ... Finished", dashed: true },
@@ -515,20 +512,11 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     Seq.register("seq-0rtt", { actors: CS, label: "QUIC 0-RTT: one round trip", messages: [
       { from: "C", to: "S", text: "ClientHello + GET /", hl: true }, { from: "S", to: "C", text: "ServerHello ... response", dashed: true },
     ] });
-    Seq.register("seq-altsvc", { actors: CDS, label: "Alt-Svc: HTTP/3 only on the next connection", messages: [
-      { from: "C", to: "D", text: "A / AAAA" }, { from: "D", to: "C", text: "IP address", dashed: true },
-      { from: "C", to: "S", text: "TCP + TLS + HTTP/2" }, { from: "S", to: "C", text: "response + Alt-Svc: h3", dashed: true },
-      { note: "the browser learns about HTTP/3 only now", over: ["C", "S"] },
-      { from: "C", to: "S", text: "next connection: HTTP/3", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
-    ] });
-    Seq.register("seq-https", { actors: CDS, label: "HTTPS DNS record: HTTP/3 on the first connection", messages: [
-      { from: "C", to: "D", text: "HTTPS record" }, { from: "D", to: "C", text: "alpn=h3 + IP hints", dashed: true },
-      { from: "C", to: "S", text: "QUIC + HTTP/3", hl: true }, { from: "S", to: "C", text: "response", dashed: true },
-    ] });
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", Seq.renderAll);
     else Seq.renderAll();
   })();
 </script>
+<script src="js/experiment.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/perf.js"></script>
 <script src="js/lookup.js"></script>

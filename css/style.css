@@ -179,15 +179,18 @@ h1 .hl { color: var(--accent); }
 
 /* ---- generic sections ---- */
 section { margin-top: 56px; }
+/* section titles are the big headings; subheadings sit clearly below them */
 h2 {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .12em;
-  color: var(--accent);
-  margin: 0 0 18px;
-  font-weight: 600;
+  font-size: clamp(22px, 3.6vw, 28px);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin: 0 0 16px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
 }
-h3 { font-size: 16px; margin: 28px 0 8px; color: var(--fg); }
+h3 { font-size: 17px; margin: 30px 0 8px; color: var(--fg); font-weight: 600; }
 p { margin: 0 0 16px; }
 .dim { color: var(--fg-dim); }
 
@@ -302,20 +305,57 @@ ul.tick li::before {
 .cdf-svg rect.hit { fill: transparent; pointer-events: all; }
 .trend.cdf { padding: 10px 10px 6px; }
 
-/* Happy Eyeballs race, illustrative */
-.race { margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-inset); padding: 12px 12px 8px; }
+/* Happy Eyeballs race, animated (js/charts.js) */
+.opts { color: var(--fg-dim); font-size: 13.5px; }
+.race { margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-inset); padding: 12px 12px 4px; cursor: pointer; }
 .race-svg { display: block; max-width: 100%; height: auto; font-family: var(--sans); }
 .race-svg .lane { fill: var(--fg-dim); }
 .race-svg .lane.strong { fill: var(--fg); font-weight: 700; }
-.race-svg .r-dns { fill: var(--fg-dim); fill-opacity: 0.45; }
+.race-svg .lane.off { fill: var(--fg-dim); font-weight: 400; }
+.race-svg .r-dns { fill: var(--fg-dim); fill-opacity: 0.35; }
+.race-svg .r-dnsdone { fill: var(--accent); fill-opacity: 0.45; }
 .race-svg .r-win { fill: var(--accent); }
-.race-svg .r-lose { fill: none; stroke: var(--fg-dim); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.race-svg .r-dash { stroke: var(--fg-dim); stroke-width: 1.5; stroke-dasharray: 6 5; }
 .race-svg .r-note { fill: var(--fg-dim); }
-.race-svg .r-note.on { fill: var(--bg); font-weight: 700; }
-.race-svg .r-cut { stroke: var(--fg); stroke-width: 1.5; }
-.race-svg .r-cutlabel { fill: var(--fg); }
+.race-svg .r-note.strong { fill: var(--fg); font-weight: 700; }
+.race-svg .r-note.off { font-style: italic; }
+.race-svg .r-cursor { stroke: var(--accent); stroke-width: 2; }
+.race-svg .r-time { fill: var(--accent); font-weight: 700; }
 .race-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
 .race-svg .base { stroke: var(--line); stroke-width: 1; }
+.race-step { margin: 6px 0 8px; font-weight: 600; min-height: 1.6em; }
+
+/* two ways to advertise: the first, second, third ... connection */
+.adv { width: 100%; border-collapse: separate; border-spacing: 6px; margin: 8px 0 18px; font-size: 13.5px; }
+.adv th { color: var(--fg-dim); font-weight: 600; text-align: center; font-size: 12.5px; }
+.adv td:first-child { padding-right: 10px; min-width: 150px; }
+.adv td:first-child span { display: block; color: var(--fg-dim); font-size: 12.5px; }
+.adv .c { display: block; text-align: center; border-radius: 6px; padding: 8px 4px; font-weight: 700; font-size: 13px; }
+.adv .c.old { background: var(--fg-dim); color: var(--bg); }
+.adv .c.new { background: var(--accent); color: var(--bg); }
+.adv .c.more { opacity: 0.55; }
+@media (max-width: 560px) {
+  .adv { border-spacing: 3px; }
+  .adv td:first-child { min-width: 0; }
+  .adv .c { font-size: 11.5px; padding: 6px 2px; }
+}
+
+/* setup time curves and the FCP/LCP change chart */
+.cdf-svg .sc-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.cdf-svg .sc-line.old { stroke: var(--fg-dim); }
+.cdf-svg .sc-line.new { stroke: var(--accent); }
+.cdf-svg .sc-dot { stroke: var(--bg-inset); stroke-width: 2; }
+.cdf-svg .sc-dot.old { fill: var(--fg-dim); }
+.cdf-svg .sc-dot.new { fill: var(--accent); }
+.cdf-svg .zero { stroke: var(--fg); stroke-width: 1.2; }
+.cdf-svg .ch-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.cdf-svg .ch-line.fcp { stroke: var(--accent); }
+.cdf-svg .ch-line.lcp { stroke: var(--accent-2); }
+.cdf-svg .ch-end { fill: var(--fg); font-size: 12px; font-weight: 700; }
+.legend-dot.c-fcp, .tip-dot.c-fcp { background: var(--accent); }
+.legend-dot.c-lcp, .tip-dot.c-lcp { background: var(--accent-2); }
+.tip-dot.c-old { background: var(--fg-dim); }
+.tip-dot.c-new { background: var(--accent); }
 
 /* server, CDN support tables */
 .sup { display: grid; gap: 18px; margin: 12px 0 8px; }

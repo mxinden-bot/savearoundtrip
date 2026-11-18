@@ -253,116 +253,225 @@ function renderRttCdf(el, rtt) {
   });
 }
 
-// Happy Eyeballs v3 race, illustrative (as on the performance.now() 2026
-// slides): DNS queries go out at once, attempts start after the HTTPS record
-// arrives, each next attempt after a delay; the first to connect wins.
+// Happy Eyeballs race, animated, as on the performance.now() 2026 slides.
+// Simplified, but order and delays follow Firefox: DNS for the HTTPS record,
+// AAAA and A at once; start once the HTTPS answer is in; QUIC/IPv6, QUIC/IPv4,
+// TCP/IPv6, TCP/IPv4 at 0, 50, 150, 350 ms after the first attempt; the first
+// to connect wins, the rest is cancelled.
 const RACE = {
-  dns: [["DNS: HTTPS record", 28], ["DNS: AAAA (IPv6)", 18], ["DNS: A (IPv4)", 14]],
   usual: {
-    attempts: [["1: QUIC over IPv6", 28, 62, "win", "connected"], ["2: TCP over IPv6"], ["3: QUIC over IPv4"]],
-    cut: 62,
-    cutLabel: "first to connect wins",
+    end: 58, ms: 2600,
+    dns: [["HTTPS record", 28], ["AAAA (IPv6)", 18], ["A (IPv4)", 14]],
+    attempts: [["QUIC over IPv6", 28, 58, "win"], ["QUIC over IPv4", 78], ["TCP over IPv6", 178], ["TCP over IPv4", 378]],
+    steps: [[0, "Ask DNS for the HTTPS record, AAAA and A at once."], [28, "Answers are in: start the best option, QUIC over IPv6."], [58, "QUIC connects. Nothing else to try."]],
   },
   blocked: {
-    attempts: [["1: QUIC over IPv6", 28, 200, "lose", "no answer"], ["2: TCP over IPv6", 78, 200, "win", "connected"], ["3: QUIC over IPv4", 178, 200, "lose", ""]],
-    cut: 200,
-    cutLabel: "first to connect wins, the rest is cancelled",
+    end: 223, ms: 6000,
+    dns: [["HTTPS record", 28], ["AAAA (IPv6)", 18], ["A (IPv4)", 14]],
+    attempts: [["QUIC over IPv6", 28, null, "lose"], ["QUIC over IPv4", 78, null, "lose"], ["TCP over IPv6", 178, 223, "win"], ["TCP over IPv4", 378]],
+    steps: [[0, "Ask DNS for the HTTPS record, AAAA and A at once."], [28, "Start the best option: QUIC over IPv6."],
+      [78, "No answer after 50 ms: also try QUIC over IPv4."], [178, "Still nothing: also try TCP over IPv6."],
+      [223, "TCP connects first. The rest is cancelled, the user does not notice."]],
   },
 };
 
-function renderRace(el, sc) {
+function renderRace(el, sc, t) {
   const W = Math.max(300, el.clientWidth || 720);
   const narrow = W < 560;
-  const labelW = narrow ? 116 : 170, padR = 10, fs = narrow ? 11.5 : 13;
-  const maxMs = 240;
-  const x = (ms) => labelW + (ms / maxMs) * (W - labelW - padR);
-  const charW = fs * 0.56;
-  let y = 6, s = "";
-  for (const [name, ms] of RACE.dns) {
-    s += `<text class="lane" x="0" y="${y + 13}" font-size="${fs}">${name}</text>` +
-      `<rect class="r-dns" x="${x(0)}" y="${y + 2}" width="${x(ms) - x(0)}" height="16" rx="3"></rect>`;
-    y += 24;
-  }
-  y += 12;
-  const attTop = y;
-  for (const [name, from, to, kind, note] of sc.attempts) {
-    s += `<text class="lane strong" x="0" y="${y + 15}" font-size="${fs}">${name}</text>`;
-    if (from != null) {
-      const x0 = x(from), w = x(to) - x0;
-      s += `<rect class="r-${kind}" x="${x0}" y="${y}" width="${w}" height="22" rx="4"></rect>`;
-      if (note) {
-        const inside = w > note.length * charW + 14;
-        s += `<text class="r-note${kind === "win" && inside ? " on" : ""}" x="${inside ? x0 + 8 : x0 + w + 6}" y="${y + 15}" font-size="${fs}">${note}</text>`;
-      }
+  const labelW = narrow ? 118 : 180, padR = 10, fs = narrow ? 11.5 : 13, TMAX = 300;
+  const x = (ms) => labelW + ((W - labelW - padR) * Math.min(ms, TMAX)) / TMAX;
+  const done = t >= sc.end, charW = fs * 0.56;
+  const dashed = (x0, x1, yy, h, closed) => {
+    const st = `class="r-dash"`;
+    return `<line ${st} x1="${x0}" y1="${yy}" x2="${x1}" y2="${yy}"/><line ${st} x1="${x0}" y1="${yy + h}" x2="${x1}" y2="${yy + h}"/>` +
+      `<line ${st} x1="${x0}" y1="${yy}" x2="${x0}" y2="${yy + h}"/>` + (closed ? `<line ${st} x1="${x1}" y1="${yy}" x2="${x1}" y2="${yy + h}"/>` : "");
+  };
+  const rows = [...sc.dns.map((d) => ({ kind: "dns", label: "DNS: " + d[0], start: 0, stop: d[1] })),
+    ...sc.attempts.map((a, i) => ({ kind: a[3] || "never", label: `${i + 1}: ${a[0]}`, start: a[1], stop: a[2] }))];
+  const top = 22, LANE = 30;
+  let s = "";
+  rows.forEach((r, i) => {
+    const yy = top + i * LANE + (r.kind === "dns" ? 0 : 10), h = r.kind === "dns" ? 16 : 22, mid = yy + h / 2 + 4;
+    const started = t >= r.start, cancelled = done && r.kind === "lose";
+    s += `<text class="lane${r.kind === "dns" ? "" : " strong"}${started || r.kind === "dns" ? "" : " off"}" x="0" y="${mid}" font-size="${fs}">${r.label}</text>`;
+    if (r.kind === "dns" && t > 0) {
+      s += `<rect class="${t >= r.stop ? "r-dnsdone" : "r-dns"}" x="${x(0)}" y="${yy}" width="${x(Math.min(t, r.stop)) - x(0)}" height="${h}" rx="3"/>`;
+    } else if (r.kind === "win" && started) {
+      if (t >= r.stop) {
+        s += `<rect class="r-win" x="${x(r.start)}" y="${yy}" width="${x(r.stop) - x(r.start)}" height="${h}" rx="4"/>` +
+          `<text class="r-note strong" x="${x(r.stop) + 8}" y="${mid}" font-size="${fs}">connected</text>`;
+      } else s += dashed(x(r.start), x(t), yy, h, false);
+    } else if (r.kind === "lose" && started) {
+      const w = x(Math.min(t, sc.end)) - x(r.start), note = cancelled ? "no answer, cancelled" : "no answer";
+      s += `<g opacity="${cancelled ? 0.5 : 1}">${dashed(x(r.start), x(r.start) + w, yy, h, cancelled)}` +
+        (w > note.length * charW + 16 ? `<text class="r-note" x="${x(r.start) + 8}" y="${mid}" font-size="${fs}">${note}</text>` : "") + `</g>`;
+    } else if (r.kind === "never" && done) {
+      const inside = r.start < TMAX;
+      s += `<text class="r-note off" x="${inside ? x(r.start) : W - padR}" y="${mid}" font-size="${fs}"${inside ? "" : ' text-anchor="end"'}>never started</text>`;
     }
-    y += 32;
+  });
+  const ay = top + rows.length * LANE + 20;
+  s += `<line class="base" x1="${x(0)}" x2="${W - padR}" y1="${ay}" y2="${ay}"/>`;
+  for (let ms = 0; ms <= TMAX; ms += 50) {
+    if (narrow && ms % 100) continue;
+    s += `<text class="ax" x="${x(ms)}" y="${ay + 16}" text-anchor="${ms ? "middle" : "start"}">${ms ? ms : "0 ms"}</text>`;
   }
-  // The cut label gets its own row; it sits right of the cut, else left of it,
-  // but never over the lane labels.
-  const cx = x(sc.cut), avail = W - padR - labelW;
-  const lines = sc.cutLabel.length * charW > avail ? sc.cutLabel.split(/, /).map((l, i, a) => (i < a.length - 1 ? l + "," : l)) : [sc.cutLabel];
-  const tw = Math.max(...lines.map((l) => l.length * charW));
-  const lx = cx + 6 + tw < W - padR ? cx + 6 : Math.max(labelW, cx - 6 - tw);
-  s += `<line class="r-cut" x1="${cx}" x2="${cx}" y1="${attTop - 6}" y2="${y + 4 + lines.length * (fs + 3)}"></line>` +
-    `<text class="r-cutlabel" x="${lx}" y="${y + 12}" font-size="${fs}">` +
-    lines.map((l, i) => `<tspan x="${lx}" dy="${i ? fs + 3 : 0}">${l}</tspan>`).join("") + `</text>`;
-  y += 14 + lines.length * (fs + 3);
-  s += `<line class="base" x1="${x(0)}" x2="${W - padR}" y1="${y}" y2="${y}"></line>`;
-  for (const t of [0, 50, 100, 150, 200]) {
-    s += `<text class="ax" x="${x(t)}" y="${y + 16}" text-anchor="${t === 0 ? "start" : "middle"}">${t === 0 ? "0 ms" : t}</text>`;
-  }
-  const H = y + 22;
-  el.innerHTML = `<svg class="race-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Illustrative Happy Eyeballs race">${s}</svg>`;
+  const cx = x(Math.min(t, sc.end));
+  s += `<line class="r-cursor" x1="${cx}" x2="${cx}" y1="${top - 8}" y2="${ay}"/>`;
+  if (!done) s += `<text class="r-time" x="${cx + 6}" y="${top - 10}" font-size="${fs}">${Math.round(t)} ms</text>`;
+  const step = sc.steps.filter((p) => t >= p[0]).pop()[1];
+  el.innerHTML =
+    `<svg class="race-svg" viewBox="0 0 ${W} ${ay + 22}" width="${W}" height="${ay + 22}" role="img" aria-label="${step}">${s}</svg>` +
+    `<p class="race-step">${step}</p>`;
 }
 
-// Grouped columns: one group per percentile, TCP + TLS (gray) next to QUIC
-// (green), values on the column tops, hover tooltip per column.
-function renderGrouped(el, groups) {
-  const W = Math.max(300, el.clientWidth || 720);
-  const padL = 52, padR = 8, padT = 24, padB = 26, H = 240;
-  const base = H - padB;
-  const max = Math.ceil(Math.max(...groups.map((g) => Math.max(g[1], g[2]))) / 200) * 200;
-  const y = (v) => padT + (1 - v / max) * (base - padT);
-  const slot = (W - padL - padR) / groups.length;
-  const bw = Math.min(40, slot * 0.3), gap = 2;
-  const unit = W < 560 ? "" : " ms"; // the axis says ms; on a phone the labels need the room
-  let s = "";
-  for (let t = 0; t <= max; t += 200) {
-    s += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"></line>` +
-      `<text class="ax" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t} ms</text>`;
-  }
-  const col = (x0, v, cls, i, label) => {
-    const top = y(v), r = Math.min(4, bw / 2);
-    return `<path class="gcol ${cls}" d="M${x0},${base} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + bw - r} Q${x0 + bw},${top} ${x0 + bw},${top + r} V${base} Z"></path>` +
-      `<text class="gval${cls === "new" ? " strong" : ""}" x="${x0 + bw / 2}" y="${top - 7}" text-anchor="middle">${v}${unit}</text>` +
-      `<rect class="hit" data-tip="${label}" x="${x0}" y="${padT}" width="${bw}" height="${base - padT}"></rect>`;
-  };
-  groups.forEach(([name, a, b], i) => {
-    const cx = padL + slot * (i + 0.5);
-    s += col(cx - bw - gap / 2, a, "old", i, `${name}|TCP + TLS (HTTP/2)|${a} ms`) +
-      col(cx + gap / 2, b, "new", i, `${name}|QUIC (HTTP/3)|${b} ms`) +
-      `<text class="ax gname" x="${cx}" y="${H - 7}" text-anchor="middle">${name}</text>`;
-  });
-  el.innerHTML =
-    `<div class="trend grouped"><svg class="grp-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Connection setup time, TCP + TLS vs QUIC: ` +
-    groups.map(([n, a, b]) => `${n} ${a} ms vs ${b} ms`).join(", ") +
-    `"><line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${s}</svg><div class="trend-tip" hidden></div></div>`;
-
-  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip");
-  wrap.querySelectorAll("rect.hit").forEach((h) => {
-    const [p, series, v] = h.dataset.tip.split("|");
-    const move = (e) => {
-      tip.hidden = false;
-      tip.innerHTML = `<div class="tip-date">${p}</div><div class="tip-row">${series}<span class="tip-v">${v}</span></div>`;
-      const box = wrap.getBoundingClientRect();
-      let lx = e.clientX - box.left + 14;
-      if (lx + 200 > box.width) lx = e.clientX - box.left - 200;
-      tip.style.left = Math.max(4, lx) + "px";
-      tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+// Play when scrolled into view, replay on click; final state for reduced motion.
+function raceAnimate(el, sc) {
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let t = still ? sc.end : 0;
+  const run = () => {
+    if (still) return renderRace(el, sc, sc.end);
+    cancelAnimationFrame(el._raf);
+    const t0 = performance.now(), hold = 300;
+    const frame = (now) => {
+      const p = Math.max(0, (now - t0 - hold) / sc.ms);
+      t = Math.min(1, p) * sc.end;
+      renderRace(el, sc, t);
+      if (p < 1) el._raf = requestAnimationFrame(frame);
     };
-    h.addEventListener("mouseenter", move);
-    h.addEventListener("mousemove", move);
-    h.addEventListener("mouseleave", () => (tip.hidden = true));
+    el._raf = requestAnimationFrame(frame);
+  };
+  sized.push(() => renderRace(el, sc, t));
+  renderRace(el, sc, t);
+  el.title = "click to replay";
+  el.addEventListener("click", run);
+  if ("IntersectionObserver" in window && !still) {
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        run();
+      }
+    }, { threshold: 0.6 });
+    io.observe(el);
+  } else run();
+}
+
+// Two cumulative curves on a linear axis, 0 to 300 ms: connection setup over
+// TCP + TLS (HTTP/2) vs QUIC (HTTP/3), medians marked; hover reads both.
+function renderSetupCdf(el, sc) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const padL = 42, padR = 14, padT = 22, padB = 28, H = narrow ? 240 : 280, TMAX = 300, base = H - padB;
+  const x = (ms) => padL + (Math.min(ms, TMAX) / TMAX) * (W - padL - padR);
+  const y = (q) => padT + (1 - q / 100) * (base - padT);
+  const curve = (c) => {
+    const pts = [[0, 0], ...c.cdf];
+    const k = pts.findIndex(([ms]) => ms > TMAX);
+    return k < 0 ? pts : pts.slice(0, k + 1);
+  };
+  const series = [["old", sc.tcp], ["new", sc.quic]];
+  let s = "";
+  for (const q of [0, 25, 50, 75, 100]) {
+    s += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(q)}" y2="${y(q)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(q) + 4}" text-anchor="end">${q}%</text>`;
+  }
+  for (let t = 0; t <= TMAX; t += narrow ? 100 : 50) {
+    s += `<text class="ax" x="${Math.min(x(t), W - padR - 16)}" y="${H - 8}" text-anchor="middle">${t ? t + " ms" : "0"}</text>`;
+  }
+  s += `<text class="ax ytitle" x="${padL}" y="${padT - 9}">share of connections</text>`;
+  s += `<clipPath id="setupclip"><rect x="${padL}" y="0" width="${W - padL - padR}" height="${H}"/></clipPath>`;
+  for (const [cls, c] of series) {
+    s += `<path class="sc-line ${cls}" clip-path="url(#setupclip)" d="M${curve(c).map(([ms, q]) => `${x(ms).toFixed(1)},${y(q).toFixed(1)}`).join(" L")}"></path>`;
+  }
+  for (const [cls, c] of series) s += `<circle class="sc-dot ${cls}" cx="${x(c.p50)}" cy="${y(50)}" r="5"></circle>`;
+  s += `<line class="cdf-cross" x1="0" x2="0" y1="${padT}" y2="${base}" visibility="hidden"></line>`;
+  s += `<rect class="hit" x="${padL}" y="${padT}" width="${W - padL - padR}" height="${base - padT}"></rect>`;
+  el.innerHTML =
+    `<div class="trend cdf"><svg class="cdf-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
+    `aria-label="Connection setup time: median ${Math.round(sc.tcp.p50)} ms over TCP and TLS, ${Math.round(sc.quic.p50)} ms over QUIC">` +
+    `<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${s}</svg>` +
+    `<div class="trend-tip" hidden></div></div>`;
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip"), cross = wrap.querySelector(".cdf-cross");
+  const at = (c, ms) => { let q = 0; for (const [m, v] of c.cdf) { if (m > ms) break; q = v; } return q; };
+  const hit = wrap.querySelector("rect.hit");
+  const move = (e) => {
+    const box = wrap.getBoundingClientRect(), svgBox = hit.ownerSVGElement.getBoundingClientRect();
+    const px = e.clientX - svgBox.left;
+    const ms = Math.max(0, Math.min(TMAX, ((px - padL) / (W - padL - padR)) * TMAX));
+    cross.setAttribute("x1", x(ms));
+    cross.setAttribute("x2", x(ms));
+    cross.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    tip.innerHTML = `<div class="tip-date">at or below ${Math.round(ms)} ms</div>` +
+      `<div class="tip-row"><span class="tip-dot c-old"></span>TCP + TLS<span class="tip-v">${at(sc.tcp, ms)}%</span></div>` +
+      `<div class="tip-row"><span class="tip-dot c-new"></span>QUIC<span class="tip-v">${at(sc.quic, ms)}%</span></div>`;
+    let lx = e.clientX - box.left + 14;
+    if (lx + 180 > box.width) lx = e.clientX - box.left - 180;
+    tip.style.left = Math.max(4, lx) + "px";
+    tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+  };
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("mouseenter", move);
+  hit.addEventListener("mouseleave", () => {
+    tip.hidden = true;
+    cross.setAttribute("visibility", "hidden");
+  });
+}
+
+// FCP and LCP change by percentile, Happy Eyeballs v3 vs control (negative is
+// faster), with a zero line; hover reads both at a percentile.
+function renderChange(el, ex) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const padL = 40, padR = narrow ? 40 : 48, padT = 22, padB = 28, H = narrow ? 230 : 260;
+  const lo = Math.floor(Math.min(...ex.fcp.map((c) => c[1]), ...ex.lcp.map((c) => c[1])));
+  const hi = Math.max(1, Math.ceil(Math.max(...ex.fcp.map((c) => c[1]), ...ex.lcp.map((c) => c[1]))));
+  const x = (p) => padL + ((p - 10) / 89) * (W - padL - padR);
+  const y = (v) => padT + ((hi - v) / (hi - lo)) * (H - padB - padT);
+  let s = "";
+  for (let v = lo; v <= hi; v++) {
+    s += `<line class="${v === 0 ? "zero" : "grid"}" x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${v > 0 ? "+" : ""}${v}%</text>`;
+  }
+  for (const p of narrow ? [10, 50, 90, 99] : [10, 25, 50, 75, 90, 99]) {
+    s += `<text class="ax" x="${x(p)}" y="${H - 8}" text-anchor="middle">P${p}</text>`;
+  }
+  s += `<text class="ax ytitle" x="${padL}" y="${padT - 9}">change vs control, lower is faster</text>`;
+  for (const [cls, name, c] of [["fcp", "FCP", ex.fcp], ["lcp", "LCP", ex.lcp]]) {
+    s += `<path class="ch-line ${cls}" d="M${c.map(([p, v]) => `${x(p).toFixed(1)},${y(v).toFixed(1)}`).join(" L")}"></path>`;
+    const last = c[c.length - 1];
+    s += `<text class="ch-end" x="${x(last[0]) + 6}" y="${y(last[1]) + 4}">${name}</text>`;
+  }
+  s += `<line class="cdf-cross" x1="0" x2="0" y1="${padT}" y2="${H - padB}" visibility="hidden"></line>`;
+  s += `<rect class="hit" x="${padL}" y="${padT}" width="${W - padL - padR}" height="${H - padB - padT}"></rect>`;
+  el.innerHTML =
+    `<div class="trend cdf"><svg class="cdf-svg ch-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
+    `aria-label="Change in first and largest contentful paint with Happy Eyeballs v3, by percentile">${s}</svg>` +
+    `<div class="trend-tip" hidden></div></div>`;
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip"), cross = wrap.querySelector(".cdf-cross");
+  const hit = wrap.querySelector("rect.hit");
+  const fmt = (c) => `${c[1] > 0 ? "+" : ""}${c[1].toFixed(1)}% (${c[2] > 0 ? "+" : ""}${c[2]} ms)`;
+  const move = (e) => {
+    const box = wrap.getBoundingClientRect(), svgBox = hit.ownerSVGElement.getBoundingClientRect();
+    const p = Math.max(10, Math.min(99, Math.round(10 + ((e.clientX - svgBox.left - padL) / (W - padL - padR)) * 89)));
+    const f = ex.fcp.find((c) => c[0] === p), l = ex.lcp.find((c) => c[0] === p);
+    cross.setAttribute("x1", x(p));
+    cross.setAttribute("x2", x(p));
+    cross.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    tip.innerHTML = `<div class="tip-date">P${p}</div>` +
+      `<div class="tip-row"><span class="tip-dot c-fcp"></span>FCP<span class="tip-v">${fmt(f)}</span></div>` +
+      `<div class="tip-row"><span class="tip-dot c-lcp"></span>LCP<span class="tip-v">${fmt(l)}</span></div>`;
+    let lx = e.clientX - box.left + 14;
+    if (lx + 200 > box.width) lx = e.clientX - box.left - 200;
+    tip.style.left = Math.max(4, lx) + "px";
+    tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+  };
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("mouseenter", move);
+  hit.addEventListener("mouseleave", () => {
+    tip.hidden = true;
+    cross.setAttribute("visibility", "hidden");
   });
 }
 
@@ -448,15 +557,19 @@ function renderRelease(rel) {
     );
   }
 
-  if (rel.setup_tcp && rel.setup_quic) {
-    const a = rel.setup_tcp, b = rel.setup_quic;
+  if (rel.setup_cdf) {
+    const sc = rel.setup_cdf;
     const el = document.getElementById("chart-setup");
-    if (el) drawSized(() => renderGrouped(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]]));
+    if (el) drawSized(() => renderSetupCdf(el, sc));
+    set("setup-med-tcp", `${Math.round(sc.tcp.p50)} ms`);
+    set("setup-med-quic", `${Math.round(sc.quic.p50)} ms`);
+    const fast = sc.quic.cdf.find(([ms]) => ms >= 1);
     set(
       "setup-cap",
-      `Connection setup time, desktop page loads to servers that speak HTTP/3, Firefox ${a.version} Release, ` +
-        `each client weighted equally: TCP + TLS for HTTP/2 vs the QUIC handshake for HTTP/3. Source: GLAM: ` +
-        `${GLAM("network_sup_http3_tcp_connection", "network.sup_http3_tcp_connection")}, ` +
+      `Connection setup time, share of connections at or below each time, Firefox ${sc.version} Release, ` +
+        `desktop page loads to servers that support HTTP/3: over HTTP/2 (TCP + TLS) vs over HTTP/3 (QUIC). ` +
+        (fast ? `About ${Math.round(fast[1])}% of QUIC connections set up in about 1 ms or less, likely 0-RTT or resumed. ` : "") +
+        `Source: GLAM: ${GLAM("network_sup_http3_tcp_connection", "network.sup_http3_tcp_connection")}, ` +
         `${GLAM("network_http3_tls_handshake", "network.http3_tls_handshake")}.`
     );
   }
@@ -472,26 +585,6 @@ function renderRelease(rel) {
     );
   }
 
-  if (rel.ipv6 && rel.tls13 && hv) {
-    const h3now = hv.h3[hv.h3.length - 1];
-    const el = document.getElementById("chart-adopt");
-    if (el)
-      renderBars(el, [
-        ["IPv6, 1998", rel.ipv6.share, "c-old"],
-        ["TLS 1.3, 2018", rel.tls13.share, "c-new"],
-        ["HTTP/3, 2022", h3now, "c-new"],
-      ]);
-    set(
-      "adopt-cap",
-      `Share of Firefox ${rel.tls13.version} Release traffic: IPv6 of HTTP requests ` +
-        `(${GLAM("networking_connection_address_type", "networking.connection_address_type")}), ` +
-        `TLS 1.3 of TLS handshakes (${GLAM("tls_handshake_version", "tls_handshake_version")}), ` +
-        `HTTP/3 of HTTP responses (${GLAM("networking_http_response_version", "networking.http_response_version")}). ` +
-        `Year of the standard: <a href="https://www.rfc-editor.org/rfc/rfc2460">RFC 2460</a>, ` +
-        `<a href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446</a>, ` +
-        `<a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114</a>.`
-    );
-  }
 }
 
 async function loadGlam() {
@@ -575,6 +668,8 @@ document.addEventListener("DOMContentLoaded", loadGlam);
 document.addEventListener("DOMContentLoaded", () => {
   for (const [id, key] of [["race-usual", "usual"], ["race-blocked", "blocked"]]) {
     const el = document.getElementById(id);
-    if (el) drawSized(() => renderRace(el, RACE[key]));
+    if (el) raceAnimate(el, RACE[key]);
   }
+  const ch = document.getElementById("chart-change");
+  if (ch && window.EXPERIMENT) drawSized(() => renderChange(ch, window.EXPERIMENT));
 });
