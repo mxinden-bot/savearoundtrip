@@ -39,7 +39,7 @@
       very first packet. Servers advertise HTTP/3, and clients race it,
       falling back where it does not work.
     </p>
-    <div class="rtviz" role="img" aria-label="Round trips until the first response byte: HTTP/2 over TCP and TLS 1.3 takes 3, HTTP/3 over QUIC takes 2, HTTP/3 with QUIC 0-RTT on a repeat visit takes 1.">
+    <div class="rtviz" role="img" aria-label="Round trips per new connection: HTTP/2 over TCP and TLS 1.3 takes 3, HTTP/3 over QUIC takes 2, HTTP/3 with QUIC 0-RTT on a repeat visit takes 1.">
       <div class="rtrow">
         <div class="rtlabel"><b>HTTP/2</b> TCP + TLS 1.3</div>
         <div class="rttrack"><span class="seg old">TCP</span><span class="seg old">TLS</span><span class="seg old">request</span></div>
@@ -99,10 +99,11 @@
   <section id="round-trips">
     <h2>one round trip less</h2>
     <p>
-      Before the first byte of a response arrives, every new connection pays
-      round trips for its handshakes. QUIC folds the transport and the TLS
-      handshake into one, so HTTP/3 saves a round trip. QUIC 0-RTT saves another on
-      a repeat visit.
+      Every new connection pays round trips for its handshakes before the
+      request can go out. HTTP/2 runs on TCP and TLS: one handshake each. HTTP/3
+      runs on QUIC, a new transport protocol that does both in a single
+      handshake, so HTTP/3 saves a round trip. On a repeat visit, QUIC 0-RTT
+      saves another: the request goes out with the very first packet.
     </p>
     <div class="rt-grid">
       <figure class="rt-card">
@@ -119,8 +120,8 @@
       </figure>
     </div>
     <p class="chart-cap">
-      Round trips until the first response byte. TLS 1.3 over
-      TCP has 0-RTT too, but the TCP handshake still costs a round trip first.
+      TLS 1.3 over TCP has 0-RTT too, but the TCP handshake still costs a
+      round trip first.
     </p>
 
     <h3>What one round trip costs</h3>
