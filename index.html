@@ -39,12 +39,24 @@
       very first packet. Offer HTTP/3 on the server, and the browser races it
       on the client, falling back where it does not work.
     </p>
-    <a class="ladder" href="#round-trips" aria-label="Round trips until the first response byte">
-      <span class="rung"><span class="n">3</span><span class="l">HTTP/2<br>TCP + TLS 1.3</span></span>
-      <span class="rung good"><span class="n">2</span><span class="l">HTTP/3<br>QUIC</span></span>
-      <span class="rung best"><span class="n">1</span><span class="l">HTTP/3<br>QUIC 0-RTT</span></span>
-    </a>
-    <p class="ladder-cap">Round trips until the first response byte.</p>
+    <div class="rtviz" role="img" aria-label="Round trips until the first response byte: HTTP/2 over TCP and TLS 1.3 takes 3, HTTP/3 over QUIC takes 2, HTTP/3 with QUIC 0-RTT on a repeat visit takes 1.">
+      <div class="rtrow">
+        <div class="rtlabel"><b>HTTP/2</b> TCP + TLS 1.3</div>
+        <div class="rttrack"><span class="seg old">TCP</span><span class="seg old">TLS</span><span class="seg old">request</span></div>
+        <div class="rtcount"><b>3</b> round trips</div>
+      </div>
+      <div class="rtrow">
+        <div class="rtlabel"><b>HTTP/3</b> QUIC</div>
+        <div class="rttrack"><span class="seg new">QUIC</span><span class="seg new">request</span><span class="seg saved">saved</span></div>
+        <div class="rtcount"><b>2</b> round trips</div>
+      </div>
+      <div class="rtrow">
+        <div class="rtlabel"><b>HTTP/3</b> QUIC 0-RTT, repeat visit</div>
+        <div class="rttrack"><span class="seg new">QUIC + request</span><span class="seg saved span2">saved</span></div>
+        <div class="rtcount"><b>1</b> round trip</div>
+      </div>
+    </div>
+    <p class="ladder-cap">Round trips until the first response byte. <a href="#round-trips">The handshakes</a></p>
   </div>
 
   <!-- CHECK -->
