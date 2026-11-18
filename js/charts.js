@@ -254,32 +254,55 @@ function renderRttHist(el, rtt) {
   });
 }
 
-// Before -> after per percentile: a gray dot (TCP + TLS) joined to a green dot
-// (QUIC) on a linear axis from 0, so "about half" is visible; exact values in
-// a column on the right.
-function renderDumbbell(el, rows) {
+// Grouped columns: one group per percentile, TCP + TLS (gray) next to QUIC
+// (green), values on the column tops, hover tooltip per column.
+function renderGrouped(el, groups) {
   const W = Math.max(300, el.clientWidth || 720);
-  const narrow = W < 560;
-  const padL = 40, padR = narrow ? 92 : 120, rowH = 40, padT = 8, padB = 26;
-  const H = padT + rows.length * rowH + padB;
-  const max = Math.ceil(Math.max(...rows.map((r) => Math.max(r[1], r[2]))) / 200) * 200;
-  const x = (v) => padL + (v / max) * (W - padL - padR);
+  const padL = 52, padR = 8, padT = 24, padB = 26, H = 240;
+  const base = H - padB;
+  const max = Math.ceil(Math.max(...groups.map((g) => Math.max(g[1], g[2]))) / 200) * 200;
+  const y = (v) => padT + (1 - v / max) * (base - padT);
+  const slot = (W - padL - padR) / groups.length;
+  const bw = Math.min(40, slot * 0.3), gap = 2;
+  const unit = W < 560 ? "" : " ms"; // the axis says ms; on a phone the labels need the room
   let s = "";
   for (let t = 0; t <= max; t += 200) {
-    s += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${padT}" y2="${H - padB}"></line>` +
-      `<text class="ax" x="${x(t)}" y="${H - 8}" text-anchor="middle">${t} ms</text>`;
+    s += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t} ms</text>`;
   }
-  rows.forEach(([name, a, b], i) => {
-    const cy = padT + i * rowH + rowH / 2;
-    s += `<text class="rowname" x="0" y="${cy + 4}">${name}</text>` +
-      `<line class="dlink" x1="${x(b)}" x2="${x(a)}" y1="${cy}" y2="${cy}"></line>` +
-      `<circle class="dot old" cx="${x(a)}" cy="${cy}" r="6"></circle>` +
-      `<circle class="dot new" cx="${x(b)}" cy="${cy}" r="6"></circle>` +
-      `<text class="dval" x="${W}" y="${cy + 4}" text-anchor="end">${a} <tspan class="arrow">&rarr;</tspan> <tspan class="strong">${b} ms</tspan></text>`;
+  const col = (x0, v, cls, i, label) => {
+    const top = y(v), r = Math.min(4, bw / 2);
+    return `<path class="gcol ${cls}" d="M${x0},${base} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + bw - r} Q${x0 + bw},${top} ${x0 + bw},${top + r} V${base} Z"></path>` +
+      `<text class="gval${cls === "new" ? " strong" : ""}" x="${x0 + bw / 2}" y="${top - 7}" text-anchor="middle">${v}${unit}</text>` +
+      `<rect class="hit" data-tip="${label}" x="${x0}" y="${padT}" width="${bw}" height="${base - padT}"></rect>`;
+  };
+  groups.forEach(([name, a, b], i) => {
+    const cx = padL + slot * (i + 0.5);
+    s += col(cx - bw - gap / 2, a, "old", i, `${name}|TCP + TLS (HTTP/2)|${a} ms`) +
+      col(cx + gap / 2, b, "new", i, `${name}|QUIC (HTTP/3)|${b} ms`) +
+      `<text class="ax gname" x="${cx}" y="${H - 7}" text-anchor="middle">${name}</text>`;
   });
   el.innerHTML =
-    `<svg class="dumb-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Connection setup time, TCP + TLS vs QUIC: ` +
-    rows.map(([n, a, b]) => `${n} ${a} ms vs ${b} ms`).join(", ") + `">${s}</svg>`;
+    `<div class="trend grouped"><svg class="grp-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Connection setup time, TCP + TLS vs QUIC: ` +
+    groups.map(([n, a, b]) => `${n} ${a} ms vs ${b} ms`).join(", ") +
+    `"><line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${s}</svg><div class="trend-tip" hidden></div></div>`;
+
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip");
+  wrap.querySelectorAll("rect.hit").forEach((h) => {
+    const [p, series, v] = h.dataset.tip.split("|");
+    const move = (e) => {
+      tip.hidden = false;
+      tip.innerHTML = `<div class="tip-date">${p}</div><div class="tip-row">${series}<span class="tip-v">${v}</span></div>`;
+      const box = wrap.getBoundingClientRect();
+      let lx = e.clientX - box.left + 14;
+      if (lx + 200 > box.width) lx = e.clientX - box.left - 200;
+      tip.style.left = Math.max(4, lx) + "px";
+      tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
+    };
+    h.addEventListener("mouseenter", move);
+    h.addEventListener("mousemove", move);
+    h.addEventListener("mouseleave", () => (tip.hidden = true));
+  });
 }
 
 // HTTP/3 share by Firefox version: a trend, so a line with an area wash, the
@@ -366,7 +389,7 @@ function renderRelease(rel) {
   if (rel.setup_tcp && rel.setup_quic) {
     const a = rel.setup_tcp, b = rel.setup_quic;
     const el = document.getElementById("chart-setup");
-    if (el) drawSized(() => renderDumbbell(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]]));
+    if (el) drawSized(() => renderGrouped(el, [["P50", a.p50, b.p50], ["P75", a.p75, b.p75], ["P95", a.p95, b.p95]]));
     set(
       "setup-cap",
       `Connection setup time, desktop page loads to servers that speak HTTP/3, Firefox ${a.version} Release, ` +

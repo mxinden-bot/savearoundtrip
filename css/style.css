@@ -273,9 +273,9 @@ ul.tick li::before {
 .bar-fill.c-new, .legend-dot.c-new { background: var(--accent); }
 
 /* charts drawn at their container's pixel width (js/charts.js) */
-.hist-svg, .dumb-svg, .share-svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
-.hist-svg .ax, .dumb-svg .ax, .share-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
-.hist-svg .grid, .dumb-svg .grid, .share-svg .grid { stroke: var(--line); stroke-width: 1; }
+.hist-svg, .grp-svg, .share-svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
+.hist-svg .ax, .grp-svg .ax, .share-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
+.hist-svg .grid, .grp-svg .grid, .share-svg .grid { stroke: var(--line); stroke-width: 1; }
 .hist-svg .base { stroke: var(--fg-dim); stroke-width: 1; }
 .trend.hist, .trend.share { padding: 10px 10px 6px; }
 
@@ -286,15 +286,15 @@ ul.tick li::before {
 .hist-svg .pname { font-weight: 700; }
 .hist-svg rect.hit, .share-svg rect.hit { fill: transparent; pointer-events: all; }
 
-/* setup time: before -> after per percentile */
-.dumb-svg .rowname { fill: var(--fg); font-size: 13px; font-weight: 700; }
-.dumb-svg .dlink { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
-.dumb-svg .dot { stroke: var(--bg-inset); stroke-width: 2; }
-.dumb-svg .dot.old { fill: var(--fg-dim); }
-.dumb-svg .dot.new { fill: var(--accent); }
-.dumb-svg .dval { fill: var(--fg-dim); font-size: 13px; }
-.dumb-svg .dval .strong { fill: var(--fg); font-weight: 700; }
-.legend-dot.round { border-radius: 50%; }
+/* setup time: grouped columns per percentile */
+.grp-svg .gcol.old { fill: var(--fg-dim); }
+.grp-svg .gcol.new { fill: var(--accent); }
+.grp-svg .gval { fill: var(--fg-dim); font-size: 12.5px; }
+.grp-svg .gval.strong { fill: var(--fg); font-weight: 700; }
+.grp-svg .gname { fill: var(--fg); font-weight: 700; font-size: 13px; }
+.grp-svg .base { stroke: var(--fg-dim); stroke-width: 1; }
+.grp-svg rect.hit { fill: transparent; pointer-events: all; }
+.trend.grouped { padding: 10px 10px 6px; }
 
 /* HTTP/3 share over Firefox versions */
 .share-svg .sl-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
