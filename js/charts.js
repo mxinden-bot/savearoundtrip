@@ -184,73 +184,63 @@ function drawSized(f) {
   f();
 }
 
-// Distribution of round-trip times on a log axis, drawn as a continuous
-// density with the percentiles marked on it. GLAM's buckets differ in width
-// (1 ms wide up to ~20 ms, then rounded exponential steps), so a plain share
-// per bucket saw-tooths; dividing by the bucket's width on the log axis (with
-// integer-ms edges) gives the smooth shape. Hover shows the bucket's raw share.
-function renderRttHist(el, rtt) {
+// Round-trip time per connection as a cumulative curve on a log axis: the
+// share of connections at or below each time, with median, P75 and P95 marked
+// (as on the performance.now() 2026 slides).
+function renderRttCdf(el, rtt) {
   const W = Math.max(300, el.clientWidth || 720);
   const narrow = W < 560;
-  const padL = 12, padR = 12, padT = 44, padB = 24, H = narrow ? 200 : 230;
-  const lo = 1, hi = 10000, L = Math.log10;
+  const padL = 42, padR = 14, padT = 22, padB = 28, H = narrow ? 240 : 280;
+  const lo = 1, hi = 1000, L = Math.log10, base = H - padB;
   const x = (v) => padL + ((L(Math.min(Math.max(v, lo), hi)) - L(lo)) / (L(hi) - L(lo))) * (W - padL - padR);
-  const bs = rtt.hist.filter(([k]) => k >= lo && k < hi).map(([k, share], i, a) => {
-    const next = i + 1 < a.length ? a[i + 1][0] : hi;
-    const dens = share / L((next - 0.5) / Math.max(0.5, k - 0.5));
-    return { k, next, share, dens, xm: Math.sqrt(k * next) };
-  });
-  const dMax = Math.max(...bs.map((b) => b.dens)) * 1.08;
-  const base = H - padB;
-  const y = (d) => padT + (1 - d / dMax) * (base - padT);
+  const y = (q) => padT + (1 - q / 100) * (base - padT);
+  const pts = [[lo, 0], ...rtt.cdf.filter(([v]) => v <= hi)];
 
-  let grid = "";
-  for (const t of [1, 10, 100, 1000, 10000]) {
-    grid += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${padT - 6}" y2="${base}"></line>` +
-      `<text class="ax" x="${Math.min(Math.max(x(t), padL + 14), W - padR - 14)}" y="${H - 6}" text-anchor="middle">${msLabel(t)}</text>`;
+  let s = "";
+  for (const q of [0, 25, 50, 75, 100]) {
+    s += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(q)}" y2="${y(q)}"></line>` +
+      `<text class="ax" x="${padL - 6}" y="${y(q) + 4}" text-anchor="end">${q}%</text>`;
   }
+  for (const t of [1, 10, 100, 1000]) {
+    s += `<text class="ax" x="${Math.min(x(t), W - padR - 12)}" y="${H - 8}" text-anchor="middle">${msLabel(t)}</text>`;
+  }
+  s += `<text class="ax ytitle" x="${padL}" y="${padT - 9}">share of connections</text>`;
+  s += `<path class="cdf-line" d="M${pts.map(([v, q]) => `${x(v).toFixed(1)},${y(q).toFixed(1)}`).join(" L")}"></path>`;
 
-  const pts = bs.map((b) => `${x(b.xm).toFixed(1)},${y(b.dens).toFixed(1)}`);
-  const first = bs[0], last = bs[bs.length - 1];
-  const area = `<path class="harea" d="M${x(first.xm)},${base} L${pts.join(" L")} L${x(last.xm)},${base} Z"></path>` +
-    `<path class="hline" d="M${pts.join(" L")}"></path>`;
-
-  let hits = "";
-  bs.forEach((b, i) => {
-    hits += `<rect class="hit" data-i="${i}" x="${x(b.k)}" y="${padT}" width="${Math.max(1, x(b.next) - x(b.k))}" height="${base - padT}"></rect>`;
-  });
-
-  // Percentile markers: hairlines with labels in two staggered rows, so
-  // neighbours (P50/P75, P95/P99) never collide.
-  const fs = narrow ? 11 : 12;
-  let marks = "";
-  [["P50", rtt.p50], ["P75", rtt.p75], ["P95", rtt.p95], ["P99", rtt.p99]].forEach(([name, v], i) => {
-    const xm = x(v), ly = i % 2 ? 32 : 15;
-    const half = ((name.length + 1 + msLabel(v).length) * fs * 0.56) / 2;
-    const lx = Math.min(Math.max(xm, padL + half), W - padR - half);
-    marks += `<line class="pmark" x1="${xm}" x2="${xm}" y1="${padT - 6}" y2="${base}"></line>` +
-      `<text class="plabel" x="${lx}" y="${ly}" text-anchor="middle" font-size="${fs}"><tspan class="pname">${name}</tspan> ${msLabel(v)}</text>`;
+  const fs = narrow ? 12 : 13;
+  for (const [name, v] of [["median", rtt.p50], ["P75", rtt.p75], ["P95", rtt.p95]]) {
+    const q = (rtt.cdf.find((p) => p[0] === v) || [v, 0])[1];
+    const px = x(v), py = y(q);
+    s += `<line class="guide" x1="${padL}" x2="${px}" y1="${py}" y2="${py}"></line>` +
+      `<line class="guide" x1="${px}" x2="${px}" y1="${py}" y2="${base}"></line>` +
+      `<circle class="cdf-dot" cx="${px}" cy="${py}" r="5"></circle>` +
+      `<text class="cdf-label" x="${px - 10}" y="${py + 4}" text-anchor="end" font-size="${fs}"><tspan class="pname">${name}</tspan> ${v} ms</text>`;
+  }
+  s += `<line class="cdf-cross" x1="0" x2="0" y1="${padT}" y2="${base}" visibility="hidden"></line>`;
+  pts.slice(1).forEach(([v], i) => {
+    const x0 = i === 0 ? padL : (x(pts[i][0]) + x(v)) / 2;
+    const x1 = i + 2 < pts.length ? (x(v) + x(pts[i + 2][0])) / 2 : W - padR;
+    s += `<rect class="hit" data-i="${i + 1}" x="${x0}" y="${padT}" width="${Math.max(1, x1 - x0)}" height="${base - padT}"></rect>`;
   });
 
   el.innerHTML =
-    `<div class="trend hist"><svg class="hist-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
-    `aria-label="Distribution of HTTP/3 round-trip times: median ${rtt.p50} ms, P75 ${rtt.p75} ms, P95 ${rtt.p95} ms, P99 ${rtt.p99} ms">` +
-    `${grid}${area}<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>` +
-    `<line class="hcross" x1="0" x2="0" y1="${padT - 6}" y2="${base}" visibility="hidden"></line>${marks}${hits}</svg>` +
+    `<div class="trend cdf"><svg class="cdf-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
+    `aria-label="Round-trip time of HTTP/3 connections: half at or below ${rtt.p50} ms, 75% at or below ${rtt.p75} ms, 95% at or below ${rtt.p95} ms">` +
+    `<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${s}</svg>` +
     `<div class="trend-tip" hidden></div></div>`;
 
-  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip"), cross = wrap.querySelector(".hcross");
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip"), cross = wrap.querySelector(".cdf-cross");
   wrap.querySelectorAll("rect.hit").forEach((h) => {
-    const b = bs[+h.dataset.i];
+    const [v, q] = pts[+h.dataset.i];
     const move = (e) => {
-      cross.setAttribute("x1", x(b.xm));
-      cross.setAttribute("x2", x(b.xm));
+      cross.setAttribute("x1", x(v));
+      cross.setAttribute("x2", x(v));
       cross.setAttribute("visibility", "visible");
       tip.hidden = false;
-      tip.innerHTML = `<div class="tip-date">${b.k} to ${b.next} ms</div><div class="tip-row">share<span class="tip-v">${b.share}%</span></div>`;
+      tip.innerHTML = `<div class="tip-date">at or below ${msLabel(v)}</div><div class="tip-row">connections<span class="tip-v">${q}%</span></div>`;
       const box = wrap.getBoundingClientRect();
       let lx = e.clientX - box.left + 14;
-      if (lx + 170 > box.width) lx = e.clientX - box.left - 170;
+      if (lx + 180 > box.width) lx = e.clientX - box.left - 180;
       tip.style.left = Math.max(4, lx) + "px";
       tip.style.top = Math.max(4, e.clientY - box.top + 12) + "px";
     };
@@ -261,6 +251,68 @@ function renderRttHist(el, rtt) {
       cross.setAttribute("visibility", "hidden");
     });
   });
+}
+
+// Happy Eyeballs v3 race, illustrative (as on the performance.now() 2026
+// slides): DNS queries go out at once, attempts start after the HTTPS record
+// arrives, each next attempt after a delay; the first to connect wins.
+const RACE = {
+  dns: [["DNS: HTTPS record", 28], ["DNS: AAAA (IPv6)", 18], ["DNS: A (IPv4)", 14]],
+  usual: {
+    attempts: [["1: QUIC over IPv6", 28, 62, "win", "connected"], ["2: TCP over IPv6"], ["3: QUIC over IPv4"]],
+    cut: 62,
+    cutLabel: "first to connect wins",
+  },
+  blocked: {
+    attempts: [["1: QUIC over IPv6", 28, 200, "lose", "no answer"], ["2: TCP over IPv6", 78, 200, "win", "connected"], ["3: QUIC over IPv4", 178, 200, "lose", ""]],
+    cut: 200,
+    cutLabel: "first to connect wins, the rest is cancelled",
+  },
+};
+
+function renderRace(el, sc) {
+  const W = Math.max(300, el.clientWidth || 720);
+  const narrow = W < 560;
+  const labelW = narrow ? 116 : 170, padR = 10, fs = narrow ? 11.5 : 13;
+  const maxMs = 240;
+  const x = (ms) => labelW + (ms / maxMs) * (W - labelW - padR);
+  const charW = fs * 0.56;
+  let y = 6, s = "";
+  for (const [name, ms] of RACE.dns) {
+    s += `<text class="lane" x="0" y="${y + 13}" font-size="${fs}">${name}</text>` +
+      `<rect class="r-dns" x="${x(0)}" y="${y + 2}" width="${x(ms) - x(0)}" height="16" rx="3"></rect>`;
+    y += 24;
+  }
+  y += 12;
+  const attTop = y;
+  for (const [name, from, to, kind, note] of sc.attempts) {
+    s += `<text class="lane strong" x="0" y="${y + 15}" font-size="${fs}">${name}</text>`;
+    if (from != null) {
+      const x0 = x(from), w = x(to) - x0;
+      s += `<rect class="r-${kind}" x="${x0}" y="${y}" width="${w}" height="22" rx="4"></rect>`;
+      if (note) {
+        const inside = w > note.length * charW + 14;
+        s += `<text class="r-note${kind === "win" && inside ? " on" : ""}" x="${inside ? x0 + 8 : x0 + w + 6}" y="${y + 15}" font-size="${fs}">${note}</text>`;
+      }
+    }
+    y += 32;
+  }
+  // The cut label gets its own row; it sits right of the cut, else left of it,
+  // but never over the lane labels.
+  const cx = x(sc.cut), avail = W - padR - labelW;
+  const lines = sc.cutLabel.length * charW > avail ? sc.cutLabel.split(/, /).map((l, i, a) => (i < a.length - 1 ? l + "," : l)) : [sc.cutLabel];
+  const tw = Math.max(...lines.map((l) => l.length * charW));
+  const lx = cx + 6 + tw < W - padR ? cx + 6 : Math.max(labelW, cx - 6 - tw);
+  s += `<line class="r-cut" x1="${cx}" x2="${cx}" y1="${attTop - 6}" y2="${y + 4 + lines.length * (fs + 3)}"></line>` +
+    `<text class="r-cutlabel" x="${lx}" y="${y + 12}" font-size="${fs}">` +
+    lines.map((l, i) => `<tspan x="${lx}" dy="${i ? fs + 3 : 0}">${l}</tspan>`).join("") + `</text>`;
+  y += 14 + lines.length * (fs + 3);
+  s += `<line class="base" x1="${x(0)}" x2="${W - padR}" y1="${y}" y2="${y}"></line>`;
+  for (const t of [0, 50, 100, 150, 200]) {
+    s += `<text class="ax" x="${x(t)}" y="${y + 16}" text-anchor="${t === 0 ? "start" : "middle"}">${t === 0 ? "0 ms" : t}</text>`;
+  }
+  const H = y + 22;
+  el.innerHTML = `<svg class="race-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Illustrative Happy Eyeballs race">${s}</svg>`;
 }
 
 // Grouped columns: one group per percentile, TCP + TLS (gray) next to QUIC
@@ -386,11 +438,12 @@ function renderRelease(rel) {
 
   if (rel.rtt) {
     const el = document.getElementById("chart-rtt");
-    if (el && rel.rtt.hist) drawSized(() => renderRttHist(el, rel.rtt));
+    if (el && rel.rtt.cdf) drawSized(() => renderRttCdf(el, rel.rtt));
     set(
       "rtt-cap",
-      `Round-trip time of HTTP/3 connections, Firefox ${rel.rtt.version} Release, all platforms, ` +
-        `each client weighted equally (as GLAM reports it). Source: GLAM: ` +
+      `Round-trip time of HTTP/3 connections, share of connections at or below each time, ` +
+        `Firefox ${rel.rtt.version} Release, all platforms. Only servers that support HTTP/3, often ` +
+        `large CDNs close to the user, so likely lower than for all servers. Source: GLAM: ` +
         `${GLAM("networking_http_3_rtt", "networking.http_3_rtt")}.`
     );
   }
@@ -519,3 +572,9 @@ async function loadGlam() {
 }
 
 document.addEventListener("DOMContentLoaded", loadGlam);
+document.addEventListener("DOMContentLoaded", () => {
+  for (const [id, key] of [["race-usual", "usual"], ["race-blocked", "blocked"]]) {
+    const el = document.getElementById(id);
+    if (el) drawSized(() => renderRace(el, RACE[key]));
+  }
+});

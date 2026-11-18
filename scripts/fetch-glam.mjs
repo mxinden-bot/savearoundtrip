@@ -200,25 +200,35 @@ async function releaseShare(probe, labels) {
 }
 
 // Percentiles of a (labeled) distribution for the newest settled version.
-// GLAM's percentiles weight every client equally (they come from its
-// client-normalized histogram, not the per-request one). With `withHist`, also
-// return that same histogram as [bucket lower bound, share %], so a chart of
-// the distribution agrees with the percentiles drawn on it.
-async function releasePercentiles(probe, metricKey, scale, withHist = false) {
+// Percentiles of a (labeled) distribution for the newest settled version, as
+// GLAM reports them (each client weighted equally).
+async function releasePercentiles(probe, metricKey, scale) {
   const rows = (await query(probe, "version", "release")).filter((r) => (r.metric_key || "") === metricKey && r.percentiles);
   const byV = new Map(rows.map((r) => [r.version, r]));
   const v = settledVersions(byV).pop();
-  const row = byV.get(v);
-  const p = row.percentiles;
+  const p = byV.get(v).percentiles;
   const ms = (k) => Math.round(p[k] * scale);
-  const out = { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
-  if (withHist) {
-    const h = row.histogram || {};
-    const ks = Object.keys(h).map(Number).sort((a, b) => a - b);
-    const tot = ks.reduce((s, k) => s + h[k], 0);
-    out.hist = ks.map((k) => [k * scale, tot ? Math.round((10000 * h[k]) / tot) / 100 : 0]);
-  }
-  return out;
+  return { version: String(v), p50: ms("50"), p75: ms("75"), p95: ms("95"), p99: ms("99") };
+}
+
+// HTTP/3 round-trip time pooled over all connections (GLAM's non-normalized
+// histogram), as a cumulative curve: the share of connections at or below each
+// bucket's upper bound, in ms. Percentiles are read off the same curve.
+async function releaseRttCdf() {
+  const rows = (await query("networking_http_3_rtt", "version", "release")).filter((r) => !r.metric_key && r.non_norm_histogram);
+  const byV = new Map(rows.map((r) => [r.version, r]));
+  const v = settledVersions(byV).pop();
+  const h = byV.get(v).non_norm_histogram;
+  const ks = Object.keys(h).map(Number).sort((a, b) => a - b);
+  const tot = ks.reduce((t, k) => t + h[k], 0);
+  let c = 0;
+  const cdf = [];
+  ks.forEach((k, i) => {
+    c += h[k];
+    if (i + 1 < ks.length) cdf.push([ks[i + 1], Math.round((10000 * c) / tot) / 100]);
+  });
+  const at = (q) => (cdf.find((p) => p[1] >= q) || cdf[cdf.length - 1])[0];
+  return { version: String(v), p50: at(50), p75: at(75), p95: at(95), p99: at(99), cdf };
 }
 
 async function fetchRelease(prev) {
@@ -226,7 +236,8 @@ async function fetchRelease(prev) {
   const tasks = {
     http_version: () => releaseHttpVersion(),
     // smoothed RTT of HTTP/3 connections, in ms
-    rtt: () => releasePercentiles("networking_http_3_rtt", "", 1, true),
+    // HTTP/3 round-trip time per connection, in ms
+    rtt: () => releaseRttCdf(),
     // connection setup to servers that speak HTTP/3, page loads (ns -> ms):
     // TCP + TLS for HTTP/2, vs the QUIC handshake for HTTP/3
     setup_tcp: () => releasePercentiles("network_sup_http3_tcp_connection", "supports_http3_page", 1e-6),

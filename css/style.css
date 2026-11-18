@@ -282,20 +282,49 @@ ul.tick li::before {
 .bar-fill.c-new, .legend-dot.c-new { background: var(--accent); }
 
 /* charts drawn at their container's pixel width (js/charts.js) */
-.hist-svg, .grp-svg, .share-svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
-.hist-svg .ax, .grp-svg .ax, .share-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
-.hist-svg .grid, .grp-svg .grid, .share-svg .grid { stroke: var(--line); stroke-width: 1; }
-.hist-svg .base { stroke: var(--fg-dim); stroke-width: 1; }
-.trend.hist, .trend.share { padding: 10px 10px 6px; }
+.grp-svg, .share-svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
+.grp-svg .ax, .share-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
+.grp-svg .grid, .share-svg .grid { stroke: var(--line); stroke-width: 1; }
+.trend.share { padding: 10px 10px 6px; }
 
-/* RTT distribution with percentile markers */
-.hist-svg .harea { fill: var(--accent); fill-opacity: 0.18; }
-.hist-svg .hline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
-.hist-svg .hcross { stroke: var(--accent); stroke-width: 1.5; stroke-opacity: 0.6; }
-.hist-svg .pmark { stroke: var(--fg); stroke-width: 1; stroke-opacity: 0.55; }
-.hist-svg .plabel { fill: var(--fg); }
-.hist-svg .pname { font-weight: 700; }
-.hist-svg rect.hit, .share-svg rect.hit { fill: transparent; pointer-events: all; }
+/* RTT per connection: cumulative curve with median, P75, P95 */
+.cdf-svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
+.cdf-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
+.cdf-svg .ytitle { font-size: 12px; }
+.cdf-svg .grid { stroke: var(--line); stroke-width: 1; }
+.cdf-svg .base { stroke: var(--fg-dim); stroke-width: 1; }
+.cdf-svg .cdf-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.cdf-svg .guide { stroke: var(--fg-dim); stroke-width: 1; stroke-opacity: 0.6; }
+.cdf-svg .cdf-dot { fill: var(--accent); stroke: var(--bg-inset); stroke-width: 2; }
+.cdf-svg .cdf-label { fill: var(--fg); paint-order: stroke; stroke: var(--bg-inset); stroke-width: 4px; stroke-linejoin: round; }
+.cdf-svg .pname { font-weight: 700; }
+.cdf-svg .cdf-cross { stroke: var(--accent); stroke-width: 1.5; stroke-opacity: 0.6; }
+.cdf-svg rect.hit { fill: transparent; pointer-events: all; }
+.trend.cdf { padding: 10px 10px 6px; }
+
+/* Happy Eyeballs race, illustrative */
+.race { margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-inset); padding: 12px 12px 8px; }
+.race-svg { display: block; max-width: 100%; height: auto; font-family: var(--sans); }
+.race-svg .lane { fill: var(--fg-dim); }
+.race-svg .lane.strong { fill: var(--fg); font-weight: 700; }
+.race-svg .r-dns { fill: var(--fg-dim); fill-opacity: 0.45; }
+.race-svg .r-win { fill: var(--accent); }
+.race-svg .r-lose { fill: none; stroke: var(--fg-dim); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.race-svg .r-note { fill: var(--fg-dim); }
+.race-svg .r-note.on { fill: var(--bg); font-weight: 700; }
+.race-svg .r-cut { stroke: var(--fg); stroke-width: 1.5; }
+.race-svg .r-cutlabel { fill: var(--fg); }
+.race-svg .ax { fill: var(--fg-dim); font-size: 11.5px; }
+.race-svg .base { stroke: var(--line); stroke-width: 1; }
+
+/* server, CDN support tables */
+.sup { display: grid; gap: 18px; margin: 12px 0 8px; }
+@media (min-width: 760px) { .sup { grid-template-columns: 1fr 1.25fr; align-items: start; } }
+.sup-t { margin: 0; }
+.sup-t td.s-y { color: var(--accent); font-weight: 600; }
+.sup-t td.s-o { color: var(--fg); }
+.sup-t td.s-n { color: var(--bad); }
+.sup-t td.s-u { color: var(--fg-dim); }
 
 /* setup time: grouped columns per percentile */
 .grp-svg .gcol.old { fill: var(--fg-dim); }
