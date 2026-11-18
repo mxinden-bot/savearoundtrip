@@ -289,7 +289,9 @@ ul.tick li::before {
 .trend.hist, .trend.share { padding: 10px 10px 6px; }
 
 /* RTT distribution with percentile markers */
-.hist-svg .hcol { fill: var(--accent); fill-opacity: 0.55; }
+.hist-svg .harea { fill: var(--accent); fill-opacity: 0.18; }
+.hist-svg .hline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.hist-svg .hcross { stroke: var(--accent); stroke-width: 1.5; stroke-opacity: 0.6; }
 .hist-svg .pmark { stroke: var(--fg); stroke-width: 1; stroke-opacity: 0.55; }
 .hist-svg .plabel { fill: var(--fg); }
 .hist-svg .pname { font-weight: 700; }

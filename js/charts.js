@@ -184,38 +184,40 @@ function drawSized(f) {
   f();
 }
 
-// Distribution of round-trip times on a log axis, one column per GLAM bucket
-// (exponential buckets, so equal width), with the percentiles marked on it.
+// Distribution of round-trip times on a log axis, drawn as a continuous
+// density with the percentiles marked on it. GLAM's buckets differ in width
+// (1 ms wide up to ~20 ms, then rounded exponential steps), so a plain share
+// per bucket saw-tooths; dividing by the bucket's width on the log axis (with
+// integer-ms edges) gives the smooth shape. Hover shows the bucket's raw share.
 function renderRttHist(el, rtt) {
   const W = Math.max(300, el.clientWidth || 720);
   const narrow = W < 560;
-  const padL = 30, padR = 12, padT = 44, padB = 24, H = narrow ? 200 : 230;
+  const padL = 12, padR = 12, padT = 44, padB = 24, H = narrow ? 200 : 230;
   const lo = 1, hi = 10000, L = Math.log10;
   const x = (v) => padL + ((L(Math.min(Math.max(v, lo), hi)) - L(lo)) / (L(hi) - L(lo))) * (W - padL - padR);
-  const bs = rtt.hist.filter(([k]) => k >= lo && k < hi);
-  const step = Math.max(...bs.map((b) => b[1])) > 6 ? 2 : 1;
-  const yMax = Math.ceil(Math.max(...bs.map((b) => b[1])) / step) * step;
+  const bs = rtt.hist.filter(([k]) => k >= lo && k < hi).map(([k, share], i, a) => {
+    const next = i + 1 < a.length ? a[i + 1][0] : hi;
+    const dens = share / L((next - 0.5) / Math.max(0.5, k - 0.5));
+    return { k, next, share, dens, xm: Math.sqrt(k * next) };
+  });
+  const dMax = Math.max(...bs.map((b) => b.dens)) * 1.08;
   const base = H - padB;
-  const y = (s) => padT + (1 - s / yMax) * (base - padT);
+  const y = (d) => padT + (1 - d / dMax) * (base - padT);
 
   let grid = "";
-  for (let t = 0; t <= yMax; t += step) {
-    grid += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"></line>` +
-      `<text class="ax" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t}%</text>`;
-  }
   for (const t of [1, 10, 100, 1000, 10000]) {
-    grid += `<text class="ax" x="${x(t)}" y="${H - 6}" text-anchor="middle">${msLabel(t)}</text>`;
+    grid += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${padT - 6}" y2="${base}"></line>` +
+      `<text class="ax" x="${Math.min(Math.max(x(t), padL + 14), W - padR - 14)}" y="${H - 6}" text-anchor="middle">${msLabel(t)}</text>`;
   }
 
-  let cols = "", hits = "";
-  bs.forEach(([k, share], i) => {
-    const next = i + 1 < bs.length ? bs[i + 1][0] : hi;
-    const x0 = x(k), x1 = x(next);
-    const w = Math.max(1, x1 - x0 - 2), top = y(share), r = Math.min(2, w / 2);
-    if (share > 0 && base - top > 0.5) {
-      cols += `<path class="hcol" d="M${x0},${base} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + w - r} Q${x0 + w},${top} ${x0 + w},${top + r} V${base} Z"></path>`;
-    }
-    hits += `<rect class="hit" data-i="${i}" x="${x0}" y="${padT}" width="${Math.max(1, x1 - x0)}" height="${base - padT}"></rect>`;
+  const pts = bs.map((b) => `${x(b.xm).toFixed(1)},${y(b.dens).toFixed(1)}`);
+  const first = bs[0], last = bs[bs.length - 1];
+  const area = `<path class="harea" d="M${x(first.xm)},${base} L${pts.join(" L")} L${x(last.xm)},${base} Z"></path>` +
+    `<path class="hline" d="M${pts.join(" L")}"></path>`;
+
+  let hits = "";
+  bs.forEach((b, i) => {
+    hits += `<rect class="hit" data-i="${i}" x="${x(b.k)}" y="${padT}" width="${Math.max(1, x(b.next) - x(b.k))}" height="${base - padT}"></rect>`;
   });
 
   // Percentile markers: hairlines with labels in two staggered rows, so
@@ -233,15 +235,19 @@ function renderRttHist(el, rtt) {
   el.innerHTML =
     `<div class="trend hist"><svg class="hist-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" ` +
     `aria-label="Distribution of HTTP/3 round-trip times: median ${rtt.p50} ms, P75 ${rtt.p75} ms, P95 ${rtt.p95} ms, P99 ${rtt.p99} ms">` +
-    `${grid}<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>${cols}${marks}${hits}</svg>` +
+    `${grid}${area}<line class="base" x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}"></line>` +
+    `<line class="hcross" x1="0" x2="0" y1="${padT - 6}" y2="${base}" visibility="hidden"></line>${marks}${hits}</svg>` +
     `<div class="trend-tip" hidden></div></div>`;
 
-  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip");
+  const wrap = el.firstChild, tip = wrap.querySelector(".trend-tip"), cross = wrap.querySelector(".hcross");
   wrap.querySelectorAll("rect.hit").forEach((h) => {
-    const i = +h.dataset.i, [k, share] = bs[i], next = i + 1 < bs.length ? bs[i + 1][0] : hi;
+    const b = bs[+h.dataset.i];
     const move = (e) => {
+      cross.setAttribute("x1", x(b.xm));
+      cross.setAttribute("x2", x(b.xm));
+      cross.setAttribute("visibility", "visible");
       tip.hidden = false;
-      tip.innerHTML = `<div class="tip-date">${k} to ${next} ms</div><div class="tip-row">share<span class="tip-v">${share}%</span></div>`;
+      tip.innerHTML = `<div class="tip-date">${b.k} to ${b.next} ms</div><div class="tip-row">share<span class="tip-v">${b.share}%</span></div>`;
       const box = wrap.getBoundingClientRect();
       let lx = e.clientX - box.left + 14;
       if (lx + 170 > box.width) lx = e.clientX - box.left - 170;
@@ -250,7 +256,10 @@ function renderRttHist(el, rtt) {
     };
     h.addEventListener("mouseenter", move);
     h.addEventListener("mousemove", move);
-    h.addEventListener("mouseleave", () => (tip.hidden = true));
+    h.addEventListener("mouseleave", () => {
+      tip.hidden = true;
+      cross.setAttribute("visibility", "hidden");
+    });
   });
 }
 
