@@ -168,19 +168,27 @@ function renderRace(el, sc, t) {
     `<p class="race-step">${step}</p>`;
 }
 
-// Play when scrolled into view, replay on click; final state for reduced motion.
+// Loops like the slides: play, hold the final state for 3 s, play again, but
+// only while the diagram is on screen. Click restarts it right away. Reduced
+// motion shows the final state only.
 function raceAnimate(el, sc) {
   const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let t = still ? sc.end : 0;
-  const run = () => {
-    if (still) return renderRace(el, sc, sc.end);
+  const hold = 300, rest = 3000;
+  let t = still ? sc.end : 0, visible = false;
+  const stop = () => {
     cancelAnimationFrame(el._raf);
-    const t0 = performance.now(), hold = 300;
+    clearTimeout(el._timer);
+  };
+  const run = () => {
+    stop();
+    if (still) return renderRace(el, sc, sc.end);
+    const t0 = performance.now();
     const frame = (now) => {
       const p = Math.max(0, (now - t0 - hold) / sc.ms);
       t = Math.min(1, p) * sc.end;
       renderRace(el, sc, t);
       if (p < 1) el._raf = requestAnimationFrame(frame);
+      else el._timer = setTimeout(() => visible && run(), rest);
     };
     el._raf = requestAnimationFrame(frame);
   };
@@ -188,15 +196,22 @@ function raceAnimate(el, sc) {
   renderRace(el, sc, t);
   el.title = "click to replay";
   el.addEventListener("click", run);
-  if ("IntersectionObserver" in window && !still) {
-    const io = new IntersectionObserver((es) => {
-      if (es.some((e) => e.isIntersecting)) {
-        io.disconnect();
+  if (still) return;
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((es) => {
+      const now = es.some((e) => e.isIntersecting);
+      if (now && !visible) {
+        visible = true;
         run();
+      } else if (!now && visible) {
+        visible = false;
+        stop();
       }
-    }, { threshold: 0.6 });
-    io.observe(el);
-  } else run();
+    }, { threshold: 0.6 }).observe(el);
+  } else {
+    visible = true;
+    run();
+  }
 }
 
 // Two cumulative curves on a linear axis, 0 to 300 ms: connection setup over
