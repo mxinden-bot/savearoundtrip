@@ -26,7 +26,6 @@
       <a href="#race">clients race</a>
       <a href="#signals">servers advertise</a>
       <a href="#data">telemetry</a>
-      <a href="#publish">enable</a>
       <a href="#faq">faq</a>
     </nav>
   </header>
@@ -125,6 +124,11 @@
     </p>
 
     <h3>What one round trip costs</h3>
+    <p>
+      <b>Across Firefox users:</b> half of all HTTP/3 connections have a round
+      trip of <span id="rtt-p50">25 ms</span> or less, and one in twenty takes
+      longer than <span id="rtt-p95">118 ms</span>.
+    </p>
     <div id="chart-rtt"></div>
     <p class="chart-cap" id="rtt-cap"></p>
     <div id="pageload-viz" class="plviz" hidden></div>
@@ -149,13 +153,18 @@
       (<a href="https://www.rfc-editor.org/rfc/rfc9308#section-3.1">RFC 9308</a>):
       QUIC works <a href="https://www.mail-archive.com/quic@ietf.org/msg03313.html">97%+ of the time</a>.
     </p>
+    <p>
+      Which protocol works depends on the user's network, and the site cannot
+      know. So browsers try several options at once and keep the first that
+      connects. This is called Happy Eyeballs.
+    </p>
 
     <h3>Happy Eyeballs: race the options</h3>
     <p class="opts">A, AAAA or HTTPS record &middot; IPv4 or IPv6 &middot; TCP + TLS or QUIC &middot; HTTP/1.1, 2 or 3 &middot; with or without ECH</p>
     <p>
-      Which option works depends on the user's network, so the browser races
-      them: <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a>.
-      Usually, QUIC connects first:
+      The latest version,
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-happy-happyeyeballs-v3/">Happy Eyeballs v3</a>,
+      races QUIC against TCP. Usually, QUIC connects first:
     </p>
     <div id="race-usual" class="race"></div>
     <p>When QUIC is blocked, the next attempts start after a short delay, and TCP connects:</p>
@@ -182,9 +191,9 @@
       <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1953459">bug 1953459</a>.
     </p>
     <p>
-      That is one browser racing better. It can only reach HTTP/3 where the
-      server advertises it: a server that enables HTTP/3 and publishes an HTTPS
-      record changes it for all its clients at once.
+      This gain comes from the browser alone, with no change on any server. A
+      browser can only use HTTP/3 where the server advertises it, so a server
+      that enables and advertises HTTP/3 speeds up all its visitors at once.
     </p>
 
     <h3>Faster first and largest contentful paint</h3>
@@ -219,7 +228,7 @@
       </tbody>
     </table>
 
-    <h3>1 · <code>Alt-Svc</code> header: HTTP/3 from the second connection</h3>
+    <h3 id="signal-altsvc">1 · <code>Alt-Svc</code> header: HTTP/3 from the second connection</h3>
     <p>
       The server advertises HTTP/3 in an HTTP response header
       (<a href="https://www.rfc-editor.org/rfc/rfc7838">RFC 7838</a>). The
@@ -228,28 +237,14 @@
       <b>second connection</b>.
     </p>
 
-    <h3>2 · HTTPS DNS record: HTTP/3 on the very first connection</h3>
+    <h3 id="signal-rr">2 · HTTPS DNS record: HTTP/3 on the very first connection</h3>
     <p>
       The HTTPS record (<a href="https://www.rfc-editor.org/rfc/rfc9460">RFC 9460</a>)
       says the same in DNS. The browser looks it up together with the A and
       AAAA records, before it connects. DNS already says the server speaks
       HTTP/3, so the <b>very first connection is HTTP/3</b> too.
     </p>
-    <p>
-      Do both: the HTTPS record for the first connection, <code>Alt-Svc</code>
-      for browsers that do not look up HTTPS records.
-    </p>
-
-    <h3>3 · QUIC 0-RTT for the repeat visit</h3>
-    <p>
-      After an HTTP/3 connection, the server can hand the browser a session
-      ticket that allows early data. On the next visit, the request goes out in
-      the first packet, together with the handshake
-      (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
-    </p>
-
-    <h3>The HTTPS record does more</h3>
-    <p>Beyond HTTP/3 on the first connection, it carries what a header can't:</p>
+    <p>The HTTPS record also carries what a header can't:</p>
     <ul class="tick">
       <li><b>ECH.</b> The record carries the keys that encrypt the TLS ClientHello,
         including the server name (<a href="https://www.rfc-editor.org/rfc/rfc9849.html">RFC 9849</a>).
@@ -271,76 +266,19 @@
         <tr><td>ECH keys</td><td class="no">no</td><td class="yes"><code>ech</code></td></tr>
       </tbody>
     </table>
-  </section>
-
-  <!-- DATA -->
-  <section id="data">
-    <h2>Telemetry</h2>
     <p>
-      Firefox measures all of this. The numbers on this page come from Mozilla's
-      public <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry and
-      refresh daily.
+      Do both: the HTTPS record for the first connection, <code>Alt-Svc</code>
+      for browsers that do not look up HTTPS records.
     </p>
 
-    <h3>HTTP/3 share of Firefox requests</h3>
-    <div id="chart-h3-share"></div>
-    <p class="chart-cap" id="h3-share-cap"></p>
-
-    <h3>How Firefox learns that a server supports HTTP/3</h3>
-    <p class="dim">
-      <span class="badge">Firefox Nightly</span>
-      Each connection, by how the server advertised HTTP/3:
-    </p>
-    <div class="statgrid" id="stats-h3"></div>
-    <div id="chart-h3" class="bars"></div>
-    <p class="chart-cap">
-      <b>Alt-Svc only</b> could not use HTTP/3 on the first connection; an
-      HTTPS record would have let it. The four groups add up to 100%.
-    </p>
-    <div id="chart-trend"></div>
-    <p class="chart-cap" id="data-src"></p>
-  </section>
-
-  <!-- PUBLISH -->
-  <section id="publish">
-    <h2>Enable and advertise</h2>
-    <p>What the checklist above asks for, and how.</p>
-
-    <h3 id="step-h3">1 · Enable HTTP/3, next to HTTP/2</h3>
+    <h3 id="signal-0rtt">3 · QUIC 0-RTT for the repeat visit</h3>
     <p>
-      On the server or the CDN that browsers connect to. QUIC runs over UDP, so
-      open UDP port 443 in the firewall. HTTP/2 stays on: it is the fallback.
+      After an HTTP/3 connection, the server can hand the browser a session
+      ticket that allows early data. On the next visit, the request goes out in
+      the first packet, together with the handshake
+      (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
     </p>
 
-    <h3 id="step-altsvc">2 · Send <code>Alt-Svc</code> on every response</h3>
-    <pre><code><span class="tok-key">Alt-Svc:</span> <span class="tok-val">h3=":443"; ma=86400</span></code></pre>
-    <p class="dim">
-      HTTP/3 on port 443 of the same host; the browser may remember it for a day
-      (<code>ma</code>, in seconds).
-    </p>
-
-    <h3 id="step-rr">3 · Publish an HTTPS record with <code>alpn="h3"</code></h3>
-    <p>A ServiceMode record advertising HTTP/3, with address hints:</p>
-    <pre><code><span class="tok-com">; zone file (BIND-style)</span>
-example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val">1 . alpn="h3,h2" ipv4hint=203.0.113.10 ipv6hint=2001:db8::10</span></code></pre>
-    <ul class="fields">
-      <li><code>example.com.</code> the name it is published under; the trailing dot makes it fully qualified.</li>
-      <li><code>3600</code> the TTL: how long resolvers may cache it, in seconds. A longer TTL keeps it cached for more visitors.</li>
-      <li><code>IN</code> <code>HTTPS</code> the class and the record type (RFC 9460).</li>
-      <li><code>1</code> the priority. <code>1</code> or higher is ServiceMode: this record carries the parameters. <code>0</code> is AliasMode: it points at another name, which the browser then resolves (the <a href="#check">checker</a> follows it too).</li>
-      <li><code>.</code> the target host. <code>.</code> means the owner name itself, here <code>example.com</code>.</li>
-      <li><code>alpn="h3,h2"</code> the protocols the server speaks: <code>h3</code> is HTTP/3, <code>h2</code> is HTTP/2.</li>
-      <li><code>ipv4hint</code> / <code>ipv6hint</code> addresses the browser can start connecting to right away.</li>
-    </ul>
-
-    <h3 id="step-0rtt">4 · Enable QUIC 0-RTT</h3>
-    <p>
-      Often a single switch: <code>ssl_early_data on;</code> in
-      <a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data">nginx</a>,
-      <a href="https://developers.cloudflare.com/speed/optimization/protocol/0-rtt-connection-resumption/">0-RTT Connection Resumption</a>
-      on Cloudflare. Accept early data only for requests that are safe to
-      repeat (<a href="https://www.rfc-editor.org/rfc/rfc8470">RFC 8470</a>).
-    </p>
 
     <h3 id="support">Most servers and CDNs already support it</h3>
     <div class="sup">
@@ -371,17 +309,6 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
         </tbody>
       </table>
     </div>
-    <p>
-      Publish HTTPS records yourself: Cloudflare,
-      <a href="https://aws.amazon.com/about-aws/whats-new/2024/10/amazon-route-53-https-sshfp-svcb-tlsa-dns-support">Route 53</a>,
-      <a href="https://cloud.google.com/dns/docs/records-overview">Google Cloud DNS</a>,
-      <a href="https://techdocs.akamai.com/edge-dns/reference/supported-dns-resource-record-types">Akamai</a>,
-      NS1, <a href="https://blog.dnsimple.com/2026/02/svcb-https-record-support/">DNSimple</a>,
-      <a href="https://docs.gandi.net/en/domain_names/faq/record_types/https_record.html">Gandi</a>,
-      <a href="https://docs.hetzner.com/dns-console/dns/general/supported-dns-record-types/">Hetzner</a>,
-      <a href="https://desec.readthedocs.io/en/latest/dns/rrsets.html">deSEC</a>.
-      Not yet: <a href="https://learn.microsoft.com/en-us/azure/dns/dns-zones-records">Azure DNS</a>.
-    </p>
     <p class="chart-cap">
       Surveyed 17 November 2026 from vendor documentation. yes = supported, on
       by default or as an option; ? = no vendor statement found. Only the
@@ -389,39 +316,24 @@ example.com.  3600  IN  <span class="tok-key">HTTPS</span> <span class="tok-val"
     </p>
   </section>
 
-  <!-- RECORDS -->
-  <section id="records">
-    <h2>What HTTPS records carry in the wild</h2>
-    <p class="dim">
-      <span class="badge">Firefox Nightly</span>
-      Of the connections where Firefox saw an HTTPS record, the share whose
-      record carried each feature.
-    </p>
-    <div id="chart-feat" class="bars"></div>
-    <p class="chart-cap">
-      Source: Firefox Nightly, via
-      <a href="https://glam.telemetry.mozilla.org/fog/probe/netwerk_happy_eyeballs_https_rr_features_by_resolver/explore">GLAM</a>.
-      Per-connection estimate reconstructed from GLAM's histograms, so approximate.
+  <!-- DATA -->
+  <section id="data">
+    <h2>Telemetry</h2>
+    <p>
+      Firefox measures all of this. The numbers on this page come from Mozilla's
+      public <a href="https://glam.telemetry.mozilla.org/">GLAM</a> telemetry and
+      refresh daily.
     </p>
 
-    <h3>By resolver: DoH vs native</h3>
-    <p class="dim" id="resolver-mix"></p>
-    <div id="chart-feat-resolver"></div>
-    <p class="chart-cap">
-      Both paths carry the same features: a published record reaches either.
-    </p>
+    <h3>HTTP/3 share of Firefox requests</h3>
+    <div id="chart-h3-share"></div>
+    <p class="chart-cap" id="h3-share-cap"></p>
+
   </section>
 
   <!-- FAQ -->
   <section id="faq">
     <h2>FAQ</h2>
-
-    <h3>Can turning on HTTP/3 break a site?</h3>
-    <p>
-      Not for a browser that races. Firefox with Happy Eyeballs v3 tries HTTP/3
-      and HTTP/2 and keeps the first that connects. Keep HTTP/2 on as the
-      fallback.
-    </p>
 
     <h3>Does my CDN do this automatically?</h3>
     <p>

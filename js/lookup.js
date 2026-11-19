@@ -430,10 +430,10 @@ const yn = (b) => (b ? `<span class="pill h3">yes</span>` : `<span class="pill">
 
 // [key, item, what to do when missing, how-to anchor]
 const CHECKLIST = [
-  ["h3", "Serves HTTP/3", "Enable HTTP/3 next to HTTP/2, with UDP port 443 open.", "step-h3"],
-  ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code> on every response.`, "step-altsvc"],
-  ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "step-rr"],
-  ["zerortt", "QUIC 0-RTT for repeat visits", "Enable QUIC 0-RTT.", "step-0rtt"],
+  ["h3", "Serves HTTP/3", "Enable HTTP/3 next to HTTP/2, with UDP port 443 open.", "support"],
+  ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code> on every response.`, "signal-altsvc"],
+  ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "signal-rr"],
+  ["zerortt", "QUIC 0-RTT for repeat visits", "Enable QUIC 0-RTT.", "signal-0rtt"],
 ];
 const MARK = { ok: "✓", todo: "✗", na: "–", unknown: "?", pending: "" };
 

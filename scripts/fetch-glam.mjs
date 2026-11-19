@@ -2,31 +2,20 @@
 // browser Same-Origin Policy does not apply) and writes a small data/glam.json
 // the static page can read. Run on CI; see .github/workflows/glam.yml.
 //
-// Two parts:
-// - Firefox NIGHTLY: the two Happy Eyeballs probes (HTTP/3 discovery, HTTPS
-//   record features), the only channel carrying them today.
-// - Firefox RELEASE: HTTP version share, HTTP/3 round-trip time, connection
-//   setup time (TCP + TLS vs QUIC). Each of these is best-effort on its own:
-//   on failure the previous value is kept.
+// Firefox RELEASE: HTTP version share by version, HTTP/3 round-trip time and
+// connection setup time (TCP + TLS vs QUIC), both per connection. Each is
+// best-effort on its own: on failure the previous value is kept.
 //
-// The GLAM HTTP API is undocumented and meant for GLAM's own frontend, so this
-// is best-effort: on any failure we exit non-zero and write nothing, leaving
-// the last committed data/glam.json in place. GLAM only exposes a rolling
-// window of build_ids, so we MERGE each run's points into the existing history
-// to build a longer time series than GLAM itself keeps.
+// The GLAM HTTP API is undocumented and meant for GLAM's own frontend. If
+// nothing can be fetched and there is no previous data, we exit non-zero and
+// write nothing, leaving the last committed data/glam.json in place.
 
 import { writeFileSync, readFileSync } from "node:fs";
 
 const API = "https://glam.telemetry.mozilla.org/api/v1/data/";
-const CHANNEL = "nightly";
 const OUT = new URL("../data/glam.json", import.meta.url);
-const MAX_POINTS = 200;
 
-const EXPLORE = (probe, buckets) =>
-  `https://glam.telemetry.mozilla.org/fog/probe/${probe}/explore` +
-  `?activeBuckets=${encodeURIComponent(JSON.stringify(buckets))}`;
-
-async function query(probe, aggregationLevel, app_id = CHANNEL) {
+async function query(probe, aggregationLevel, app_id = "release") {
   const res = await fetch(API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -43,99 +32,6 @@ async function query(probe, aggregationLevel, app_id = CHANNEL) {
 
 const round = (n) => Math.round(n * 10) / 10;
 
-// A carried-feature count is always <= the record total in Firefox (metrics.rs
-// bumps "total" once per record and each feature at most once). Our per-
-// connection counts are reconstructed independently per label from GLAM's
-// bucketed histograms, so two near-equal estimates can round to a ratio just
-// over 1. Clamp: a share of records can't exceed 100%.
-const pct = (num, den) => (den ? Math.min(100, round((100 * num) / den)) : 0);
-
-// Per-connection estimate: GLAM aggregates per client, so sample_count is
-// per-client reach (misleading here). Reconstruct an approximate event/
-// connection count from the non-normalized histogram: sum bucket_value x
-// number_of_clients_in_bucket. Bucketed, so approximate.
-function eventCount(rec) {
-  const h = rec.non_norm_histogram || {};
-  let s = 0;
-  for (const k in h) s += parseFloat(k) * h[k];
-  return Math.round(s);
-}
-
-// counts {metric_key: n} -> {label: percent} over the given labels
-function shares(counts, labels, denom) {
-  const out = {};
-  for (const l of labels) out[l] = denom ? round((100 * (counts[l] || 0)) / denom) : 0;
-  return out;
-}
-
-const H3_LABELS = ["none", "altsvc_only", "both", "https_rr_only"];
-
-// Per-build feature shares from the dual-labeled `by_resolver` metric. GLAM
-// encodes the two labels as "doh[h3_alpn]" / "native[total]" etc. Per build we
-// emit: the combined share (doh+native, for the existing chart), each resolver's
-// own share, and the doh-vs-native mix of records seen.
-const FEATURES = ["h3_alpn", "ech", "ipv4hint", "ipv6hint"];
-
-function featSeries(rows) {
-  const byBuild = {};
-  for (const r of rows) {
-    const b = r.build_id;
-    (byBuild[b] ||= { build_id: b, c: {} });
-    byBuild[b].c[r.metric_key || ""] = eventCount(r);
-  }
-  return Object.values(byBuild)
-    .sort((a, b) => a.build_id.localeCompare(b.build_id))
-    .map(({ c }) => {
-      const g = (k) => c[k] || 0;
-      const dohT = g("doh[total]");
-      const natT = g("native[total]");
-      const tot = dohT + natT;
-      const o = {};
-      for (const f of FEATURES) {
-        o[`all_${f}`] = pct(g(`doh[${f}]`) + g(`native[${f}]`), tot);
-        o[`doh_${f}`] = pct(g(`doh[${f}]`), dohT);
-        o[`native_${f}`] = pct(g(`native[${f}]`), natT);
-      }
-      o.mix_doh = tot ? round((100 * dohT) / tot) : 0;
-      o.mix_native = tot ? round((100 * natT) / tot) : 0;
-      return o;
-    });
-}
-
-// Average the last K points per key. Equal-weights builds, so one outlier
-// build's huge event sum can't dominate (the problem with summing across builds).
-function avgLast(points, keys, K) {
-  const last = points.slice(-K);
-  const out = {};
-  for (const k of keys) {
-    const vals = last.map((p) => p[k] || 0);
-    out[k] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-  }
-  return out;
-}
-
-// Per-build_id time series of the four-bucket shares.
-function seriesH3(rows) {
-  const byBuild = {};
-  for (const r of rows) {
-    const b = r.build_id;
-    (byBuild[b] ||= { build_id: b, date: (r.build_date || "").slice(0, 10), counts: {} });
-    byBuild[b].counts[r.metric_key || ""] = eventCount(r);
-  }
-  return Object.values(byBuild)
-    .map(({ build_id, date, counts }) => {
-      const all = H3_LABELS.reduce((s, l) => s + (counts[l] || 0), 0);
-      return { build_id, date, ...shares(counts, H3_LABELS, all) };
-    })
-    .sort((a, b) => a.build_id.localeCompare(b.build_id));
-}
-
-function mergeSeries(existing, fresh) {
-  const map = new Map((existing || []).map((p) => [p.build_id, p]));
-  for (const p of fresh) map.set(p.build_id, p); // fresh values win
-  return [...map.values()].sort((a, b) => a.build_id.localeCompare(b.build_id)).slice(-MAX_POINTS);
-}
-
 function readExisting() {
   try {
     return JSON.parse(readFileSync(OUT, "utf8"));
@@ -143,8 +39,6 @@ function readExisting() {
     return null;
   }
 }
-
-const SMOOTH = 14; // build points to average (~1 week of Nightly)
 
 /* ---- Firefox Release ---- */
 
@@ -260,86 +154,17 @@ async function fetchRelease(prev) {
 }
 
 async function main() {
-  const FEAT_PROBE = "netwerk_happy_eyeballs_https_rr_features_by_resolver";
-  const h3Builds = await query("netwerk_happy_eyeballs_h3_discovery", "build_id");
-  const featBuilds = await query(FEAT_PROBE, "build_id");
-
   const prev = readExisting();
-  const h3pts = seriesH3(h3Builds);
-  const series = mergeSeries(prev?.h3_discovery?.series, h3pts);
-
-  // headline: average recent per-build shares (renormalized to 100), so one
-  // heavy build can't dominate the way a cross-build event sum did
-  const hAvg = avgLast(h3pts, H3_LABELS, SMOOTH);
-  const hSum = H3_LABELS.reduce((s, l) => s + hAvg[l], 0);
-
-  // netwerk.happy_eyeballs.h3_discovery stopped landing in GLAM after a June-24
-  // Firefox metric change (Bug 2047587). If a refresh has no signal, keep the
-  // last-known-good block rather than publish a bogus 0%.
-  let h3_discovery;
-  if (hSum > 0) {
-    const hShare = {};
-    for (const l of H3_LABELS) hShare[l] = round((100 * hAvg[l]) / hSum);
-    const cap = hShare.altsvc_only + hShare.both + hShare.https_rr_only;
-    h3_discovery = {
-      version: Math.max(...h3Builds.map((r) => r.version)),
-      explore_url: EXPLORE("netwerk_happy_eyeballs_h3_discovery", H3_LABELS),
-      share: hShare,
-      altsvc_only_of_h3_capable: cap ? round((100 * hShare.altsvc_only) / cap) : 0,
-      series,
-    };
-  } else if (prev?.h3_discovery) {
-    h3_discovery = { ...prev.h3_discovery, series };
-    console.warn("  h3_discovery: no fresh signal, kept last-known-good");
-  } else {
-    h3_discovery = {
-      version: 0,
-      explore_url: EXPLORE("netwerk_happy_eyeballs_h3_discovery", H3_LABELS),
-      share: { none: 0, altsvc_only: 0, both: 0, https_rr_only: 0 },
-      altsvc_only_of_h3_capable: 0,
-      series,
-    };
-  }
-
-  const featKeys = ["mix_doh", "mix_native"];
-  for (const f of FEATURES) featKeys.push(`all_${f}`, `doh_${f}`, `native_${f}`);
-  const fAvg = avgLast(featSeries(featBuilds), featKeys, SMOOTH);
-  const fShare = {};
-  const byDoh = {};
-  const byNative = {};
-  for (const f of FEATURES) {
-    fShare[f] = round(fAvg[`all_${f}`]);
-    byDoh[f] = round(fAvg[`doh_${f}`]);
-    byNative[f] = round(fAvg[`native_${f}`]);
-  }
-
   const release = await fetchRelease(prev?.release);
-
+  if (!Object.keys(release).length) throw new Error("no Firefox Release data from GLAM");
   const data = {
-    source: "Firefox Nightly, via GLAM (per-connection estimate)",
-    channel: CHANNEL,
-    approximate: true,
+    source: "Firefox Release, via GLAM",
     fetched_at: new Date().toISOString(),
     release,
-    h3_discovery,
-    https_rr_features: {
-      version: Math.max(...featBuilds.map((r) => r.version)),
-      explore_url: EXPLORE(FEAT_PROBE, ["doh[total]", "native[total]", "doh[h3_alpn]", "native[h3_alpn]"]),
-      share_of_records: fShare,
-      by_resolver: {
-        doh: byDoh,
-        native: byNative,
-        mix: { doh: round(fAvg.mix_doh), native: round(fAvg.mix_native) },
-      },
-    },
   };
-
   writeFileSync(OUT, JSON.stringify(data, null, 2) + "\n");
   console.log("wrote data/glam.json");
-  console.log("  h3 share:", data.h3_discovery.share, "(altsvc_only headline)");
-  console.log("  features:", data.https_rr_features.share_of_records);
-  console.log("  series points:", series.length);
-  console.log("  release:", JSON.stringify(release));
+  console.log("  release:", Object.keys(release).join(", "));
 }
 
 main().catch((e) => {

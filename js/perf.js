@@ -96,14 +96,15 @@
       ? `over <span class="pl-badge${s.proto === "h3" ? " good" : ""}">${pn}</span> `
       : ``;
     const rttLine = rtt
-      ? ` One round trip to this server, measured live, is <b>~${rtt} ms</b>. ` +
-        `HTTP/3 saves one of those on a new connection, and QUIC 0-RTT another on a ` +
-        `repeat visit.`
+      ? ` One round trip from you to this server is <b>~${rtt} ms</b>, measured ` +
+        `just now. HTTP/3 saves one of those on a new connection, and QUIC 0-RTT ` +
+        `another on a repeat visit.`
       : ` HTTP/3 saves a round trip on a new connection, and QUIC 0-RTT another on a ` +
         `repeat visit.`;
 
     el.innerHTML =
-      `<p class="pl-headline">Right now, this page loaded ${proto}in <b>~${ms(total)} ms</b>, ` +
+      `<p class="pl-kicker">Your connection, right now</p>` +
+      `<p class="pl-headline">This page reached you ${proto}in <b>~${ms(total)} ms</b>, ` +
       `from opening the connection to first paint.${rttLine}</p>` +
       `<div class="pl-bar">${bar}</div>` +
       `<div class="pl-key">${key}<span class="pl-keyitem pl-total">connection ` +
