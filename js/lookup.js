@@ -469,13 +469,94 @@ function checklist(domain) {
   };
 }
 
-// Asks the backend for the Alt-Svc header, a live HTTP/3 handshake and 0-RTT,
-// then fills in the checklist and two boxes alongside the HTTPS record one.
+// Asks the backend for each check separately and at once (Alt-Svc, QUIC v1,
+// QUIC v2), so each checklist item and box fills in as soon as its own answer
+// arrives. "Serves HTTP/3" and 0-RTT come from the v1 handshake, the version
+// browsers start with; v2 only adds to the QUIC versions row. If neither the
+// Alt-Svc nor the v1 request gets an answer, the backend predates the
+// per-check endpoints (or is down): fall back to the single /check.
 async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
   const altPending = pendingCard("checking the Alt-Svc header");
   const h3Pending = pendingCard("trying a live HTTP/3 handshake");
   target.append(altPending, h3Pending);
 
+  const q = encodeURIComponent(domain);
+  // null when the request itself failed: unreachable, blocked, or not JSON
+  const get = (path) =>
+    fetch(`${CHECK_API}${path}`, { cache: "no-store" })
+      .then((r) => ((r.headers.get("content-type") || "").includes("json") ? r.json() : null))
+      .catch(() => null);
+  const altP = get(`/altsvc?domain=${q}`);
+  const v1P = get(`/h3?v=1&domain=${q}`);
+  const v2P = get(`/h3?v=2&domain=${q}`);
+
+  const showAlt = (a) => {
+    if (a.error) {
+      cl.set("altsvc", "unknown", escapeHtml(a.error) + ".");
+      altPending.replaceWith(verdict("", "Alt-Svc check skipped", escapeHtml(a.error) + "."));
+      return;
+    }
+    cl.set("altsvc", a.advertises_h3 ? "ok" : "todo");
+    altPending.replaceWith(altSvcBox(a, rrHasH3));
+  };
+  let h3Card = null;
+  const showH3 = (h, a) => {
+    if (h.error) {
+      ["h3", "zerortt"].forEach((k) => cl.set(k, "unknown", escapeHtml(h.error) + "."));
+      h3Pending.replaceWith(verdict("", "HTTP/3 check skipped", escapeHtml(h.error) + "."));
+      return;
+    }
+    const speaks = h.h3_handshake_ok;
+    const d = { ...h, advertises_h3: !!(a && a.advertises_h3), quic_versions: speaks ? ["v1"] : [] };
+    setH3Items(cl, d, rrHasH3);
+    h3Card = h3Box(d, domain, rrHasH3, hintShown, speaks);
+    h3Pending.replaceWith(h3Card);
+  };
+
+  const [alt, v1] = await Promise.all([
+    altP.then((a) => {
+      if (a) showAlt(a);
+      return a;
+    }),
+    v1P.then(async (h) => {
+      if (!h) return h;
+      // the wording without a handshake depends on whether Alt-Svc advertised HTTP/3
+      showH3(h, h.error || h.h3_handshake_ok ? null : await altP);
+      return h;
+    }),
+  ]);
+
+  if (!alt && !v1) return legacyChecks(domain, altPending, h3Pending, rrHasH3, hintShown, cl);
+  if (!alt) {
+    cl.set("altsvc", "unknown", "Couldn't reach the checker.");
+    altPending.replaceWith(verdict("", "Alt-Svc check unavailable", "Couldn't reach the checker."));
+  }
+  if (!v1) {
+    ["h3", "zerortt"].forEach((k) => cl.set(k, "unknown", "Couldn't reach the checker."));
+    h3Pending.replaceWith(verdict("", "HTTP/3 check unavailable", "Couldn't reach the checker."));
+  }
+
+  const v2 = await v2P;
+  const pending = h3Card && h3Card.querySelector(".qv-pending");
+  if (pending) {
+    if (v2 && v2.h3_handshake_ok) pending.outerHTML = `<span class="pill h3">v2</span>`;
+    else pending.remove();
+  }
+}
+
+// The checklist items that come from the HTTP/3 check.
+function setH3Items(cl, d, rrHasH3) {
+  const speaks = d.h3_handshake_ok;
+  if (speaks) cl.set("h3", "ok");
+  else if (d.advertises_h3 || rrHasH3) cl.set("h3", "unknown", "Advertised, but the live handshake from our checker didn't complete.");
+  else cl.set("h3", "todo");
+  if (!speaks) cl.set("zerortt", "na", "Needs HTTP/3 first.");
+  else if (d.zero_rtt) cl.set("zerortt", d.zero_rtt.early_data ? "ok" : "todo");
+  else cl.set("zerortt", "unknown", "Not checked.");
+}
+
+// One request for everything, for a backend without the per-check endpoints.
+async function legacyChecks(domain, altPending, h3Pending, rrHasH3, hintShown, cl) {
   const unknown = (note) => ["h3", "altsvc", "zerortt"].forEach((k) => cl.set(k, "unknown", note));
   let d;
   try {
@@ -493,16 +574,8 @@ async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
     unknown(escapeHtml(d.error) + ".");
     return;
   }
-
-  const speaks = d.h3_handshake_ok;
-  if (speaks) cl.set("h3", "ok");
-  else if (d.advertises_h3 || rrHasH3) cl.set("h3", "unknown", "Advertised, but the live handshake from our checker didn't complete.");
-  else cl.set("h3", "todo");
+  setH3Items(cl, d, rrHasH3);
   cl.set("altsvc", d.advertises_h3 ? "ok" : "todo");
-  if (!speaks) cl.set("zerortt", "na", "Needs HTTP/3 first.");
-  else if (d.zero_rtt) cl.set("zerortt", d.zero_rtt.early_data ? "ok" : "todo");
-  else cl.set("zerortt", "unknown", "Not checked.");
-
   altPending.replaceWith(altSvcBox(d, rrHasH3));
   h3Pending.replaceWith(h3Box(d, domain, rrHasH3, hintShown));
 }
@@ -530,7 +603,7 @@ function altSvcBox(d, rrHasH3) {
   return v;
 }
 
-function h3Box(d, domain, rrHasH3, hintShown) {
+function h3Box(d, domain, rrHasH3, hintShown, v2Pending = false) {
   const speaks = d.h3_handshake_ok;
   let kind = "", title, sub, extra = null;
   if (speaks && rrHasH3) {
@@ -562,7 +635,11 @@ function h3Box(d, domain, rrHasH3, hintShown) {
   const [facts, row] = factList();
   row("HTTP/3 handshake", yn(speaks));
   if (d.quic_versions && d.quic_versions.length)
-    row("QUIC versions", d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" "));
+    row(
+      "QUIC versions",
+      d.quic_versions.map((x) => `<span class="pill h3">${escapeHtml(x)}</span>`).join(" ") +
+        (v2Pending ? ` <span class="pill qv-pending">checking v2</span>` : "")
+    );
   if (d.zero_rtt) {
     row("Session resumption", yn(d.zero_rtt.ticket_issued));
     row("0-RTT enabled", yn(d.zero_rtt.early_data));

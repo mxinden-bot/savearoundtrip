@@ -1,6 +1,14 @@
 // savearoundtrip connection checker.
 //
-// GET /check?domain=example.com  ->  JSON:
+// The page asks for each check separately and in parallel, so every checklist
+// item appears as soon as its own check is done:
+//
+//	GET /check/altsvc?domain=example.com   { "domain", "alt_svc", "advertises_h3", "error" }
+//	GET /check/h3?v=1&domain=example.com   { "domain", "version", "h3_handshake_ok", "transport_params", "zero_rtt", "error" }
+//	GET /check/h3?v=2&domain=example.com   (the same, for QUIC v2)
+//
+// GET /check?domain=example.com runs all of them and answers once, for pages
+// that predate the split:
 //
 //	{ "domain", "alt_svc", "advertises_h3", "h3_handshake_ok", "quic_versions", "transport_params", "zero_rtt", "error" }
 //
@@ -40,8 +48,9 @@ const opTimeout = 6 * time.Second
 
 var hostRe = regexp.MustCompile(`^([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$`)
 
-// global concurrency cap so the tiny machine can't be overwhelmed
-var sem = make(chan struct{}, 24)
+// global concurrency cap so the tiny machine can't be overwhelmed; a check from
+// the page is three requests (Alt-Svc, QUIC v1, QUIC v2)
+var sem = make(chan struct{}, 72)
 
 type result struct {
 	Domain          string         `json:"domain"`
@@ -289,44 +298,128 @@ func tryH3(ctx context.Context, host string, v quic.Version) (bool, map[string]a
 	return resp.ProtoMajor == 3, tpc.get(), tkt.result()
 }
 
-func handleCheck(w http.ResponseWriter, r *http.Request) {
+type errResult struct {
+	Domain string `json:"domain"`
+	Error  string `json:"error"`
+}
+
+// preflight sets the CORS and response headers and answers an OPTIONS
+// preflight. It returns false when the request is fully answered.
+func preflight(w http.ResponseWriter, r *http.Request) bool {
 	setCORS(w, r)
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 		w.WriteHeader(http.StatusNoContent)
-		return
+		return false
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
+	return true
+}
 
+func parseDomain(r *http.Request) string {
 	domain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("domain")))
 	domain = strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
 	if i := strings.IndexAny(domain, "/:"); i >= 0 {
 		domain = domain[:i]
 	}
-	domain = strings.TrimSuffix(domain, ".")
+	return strings.TrimSuffix(domain, ".")
+}
 
-	res := result{Domain: domain}
+// prepare validates the domain, applies the SSRF guard and takes a slot of
+// the concurrency cap. On failure it answers the request and returns false;
+// on success the caller must call release.
+func prepare(w http.ResponseWriter, domain string) (release func(), ok bool) {
 	if !hostRe.MatchString(domain) {
-		res.Error = "invalid domain"
-		writeJSON(w, http.StatusBadRequest, res)
-		return
+		writeJSON(w, http.StatusBadRequest, errResult{domain, "invalid domain"})
+		return nil, false
 	}
 	if err := publicResolvable(domain); err != nil {
-		res.Error = err.Error()
-		writeJSON(w, http.StatusBadRequest, res)
-		return
+		writeJSON(w, http.StatusBadRequest, errResult{domain, err.Error()})
+		return nil, false
 	}
-
 	select {
 	case sem <- struct{}{}:
-		defer func() { <-sem }()
+		return func() { <-sem }, true
 	case <-time.After(2 * time.Second):
-		res.Error = "busy, try again"
-		writeJSON(w, http.StatusServiceUnavailable, res)
+		writeJSON(w, http.StatusServiceUnavailable, errResult{domain, "busy, try again"})
+		return nil, false
+	}
+}
+
+type altSvcResult struct {
+	Domain       string `json:"domain"`
+	AltSvc       string `json:"alt_svc,omitempty"`
+	AdvertisesH3 bool   `json:"advertises_h3"`
+}
+
+func handleAltSvc(w http.ResponseWriter, r *http.Request) {
+	if !preflight(w, r) {
 		return
 	}
+	domain := parseDomain(r)
+	release, ok := prepare(w, domain)
+	if !ok {
+		return
+	}
+	defer release()
+	// HEAD, then GET if HEAD fails
+	ctx, cancel := context.WithTimeout(r.Context(), 2*opTimeout+time.Second)
+	defer cancel()
+	res := altSvcResult{Domain: domain}
+	res.AltSvc, res.AdvertisesH3 = checkAltSvc(ctx, domain)
+	writeJSON(w, http.StatusOK, res)
+}
+
+type h3Result struct {
+	Domain          string         `json:"domain"`
+	Version         string         `json:"version"`
+	H3HandshakeOK   bool           `json:"h3_handshake_ok"`
+	TransportParams map[string]any `json:"transport_params,omitempty"`
+	ZeroRTT         *zeroRTT       `json:"zero_rtt,omitempty"`
+}
+
+var quicVersions = map[string]quic.Version{"1": quic.Version1, "2": quic.Version2}
+
+func handleH3(w http.ResponseWriter, r *http.Request) {
+	if !preflight(w, r) {
+		return
+	}
+	domain := parseDomain(r)
+	v, known := quicVersions[r.URL.Query().Get("v")]
+	if !known {
+		writeJSON(w, http.StatusBadRequest, errResult{domain, "unknown QUIC version, use v=1 or v=2"})
+		return
+	}
+	release, ok := prepare(w, domain)
+	if !ok {
+		return
+	}
+	defer release()
+	// HEAD, then GET if HEAD fails, then the wait for the session ticket
+	ctx, cancel := context.WithTimeout(r.Context(), 2*opTimeout+ticketWait+time.Second)
+	defer cancel()
+	res := h3Result{Domain: domain, Version: "v" + r.URL.Query().Get("v")}
+	res.H3HandshakeOK, res.TransportParams, res.ZeroRTT = tryH3(ctx, domain, v)
+	if !res.H3HandshakeOK {
+		res.TransportParams, res.ZeroRTT = nil, nil
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleCheck runs every check and answers once, for pages that predate the
+// per-check endpoints.
+func handleCheck(w http.ResponseWriter, r *http.Request) {
+	if !preflight(w, r) {
+		return
+	}
+	domain := parseDomain(r)
+	release, ok := prepare(w, domain)
+	if !ok {
+		return
+	}
+	defer release()
 
 	// altSvc and the two h3 probes (v1, v2) run in parallel, each bounded by opTimeout
 	ctx, cancel := context.WithTimeout(r.Context(), opTimeout*3+2*time.Second)
@@ -334,6 +427,7 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 
 	// The Alt-Svc fetch and the two HTTP/3 probes are independent: run them at
 	// once, so a check takes as long as the slowest one, not the sum.
+	res := result{Domain: domain}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -350,17 +444,23 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/check", handleCheck)
+	mux.HandleFunc("/check/altsvc", handleAltSvc)
+	mux.HandleFunc("/check/h3", handleH3)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "savearoundtrip check service. GET /check/altsvc?domain=example.com, /check/h3?v=1&domain=example.com, or /check?domain=example.com for all at once")
+	})
+	return mux
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/check", handleCheck)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "savearoundtrip check service. GET /check?domain=example.com")
-	})
 	log.Println("listening on :" + port)
-	srv := &http.Server{Addr: ":" + port, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: ":" + port, Handler: newMux(), ReadHeaderTimeout: 5 * time.Second}
 	log.Fatal(srv.ListenAndServe())
 }

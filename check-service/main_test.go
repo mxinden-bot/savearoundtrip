@@ -2,6 +2,10 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +118,58 @@ func TestOriginAllowed(t *testing.T) {
 	} {
 		if got := originAllowed(origin); got != want {
 			t.Errorf("originAllowed(%q) = %v, want %v", origin, got, want)
+		}
+	}
+}
+
+func serve(t *testing.T, method, target, origin string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(method, target, nil)
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	rec := httptest.NewRecorder()
+	newMux().ServeHTTP(rec, req)
+	var body map[string]any
+	if rec.Body.Len() > 0 {
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	}
+	return rec, body
+}
+
+// The per-check endpoints answer CORS preflights for the site and its previews.
+func TestSplitEndpointsPreflight(t *testing.T) {
+	for _, path := range []string{"/check/altsvc", "/check/h3", "/check"} {
+		origin := "https://claude-offer-and-race-savearoundtrip.mail-f1c.workers.dev"
+		rec, _ := serve(t, http.MethodOptions, path+"?domain=example.com", origin)
+		if rec.Code != http.StatusNoContent || rec.Header().Get("Access-Control-Allow-Origin") != origin {
+			t.Errorf("OPTIONS %s: code %d, ACAO %q", path, rec.Code, rec.Header().Get("Access-Control-Allow-Origin"))
+		}
+	}
+}
+
+// Invalid input is rejected before any network work, as JSON the page can read.
+func TestSplitEndpointsRejectBadInput(t *testing.T) {
+	cases := []struct{ target, want string }{
+		{"/check/h3?v=3&domain=example.com", "unknown QUIC version"},
+		{"/check/h3?domain=example.com", "unknown QUIC version"},
+		{"/check/h3?v=1&domain=not_a_domain", "invalid domain"},
+		{"/check/altsvc?domain=not_a_domain", "invalid domain"},
+		{"/check?domain=not_a_domain", "invalid domain"},
+	}
+	for _, c := range cases {
+		rec, body := serve(t, http.MethodGet, c.target, "https://savearoundtrip.com")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: code %d, want 400", c.target, rec.Code)
+		}
+		if msg, _ := body["error"].(string); !strings.Contains(msg, c.want) {
+			t.Errorf("%s: error %q, want it to contain %q", c.target, msg, c.want)
+		}
+		if rec.Header().Get("Access-Control-Allow-Origin") != "https://savearoundtrip.com" {
+			t.Errorf("%s: missing CORS header on the error response", c.target)
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+			t.Errorf("%s: content type %q", c.target, ct)
 		}
 	}
 }
