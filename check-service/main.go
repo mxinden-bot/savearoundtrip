@@ -203,28 +203,45 @@ func checkAltSvc(ctx context.Context, host string) (string, bool) {
 	return as, strings.Contains(as, "h3")
 }
 
-// Probe HTTP/3 by attempting a handshake pinned to each QUIC version we know.
+// Probe HTTP/3 by attempting a handshake pinned to each QUIC version we know,
+// all versions in parallel.
 // Returns whether any completed, the list of supported versions (v1/v2), and
 // the server's transport parameters from the first version that handshook.
 func checkH3(ctx context.Context, host string) (bool, []string, map[string]any, *zeroRTT) {
-	var versions []string
-	var tp map[string]any
-	var zr *zeroRTT
-	for _, v := range []struct {
+	probes := []struct {
 		ver  quic.Version
 		name string
 	}{
 		{quic.Version1, "v1"},
 		{quic.Version2, "v2"},
-	} {
-		ok, params, z := tryH3(ctx, host, v.ver)
-		if ok {
-			versions = append(versions, v.name)
+	}
+	type result struct {
+		ok     bool
+		params map[string]any
+		zr     *zeroRTT
+	}
+	results := make([]result, len(probes))
+	var wg sync.WaitGroup
+	for i, p := range probes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i].ok, results[i].params, results[i].zr = tryH3(ctx, host, p.ver)
+		}()
+	}
+	wg.Wait()
+
+	var versions []string
+	var tp map[string]any
+	var zr *zeroRTT
+	for i, r := range results {
+		if r.ok {
+			versions = append(versions, probes[i].name)
 			if tp == nil {
-				tp = params
+				tp = r.params
 			}
 			if zr == nil {
-				zr = z
+				zr = r.zr
 			}
 		}
 	}
@@ -311,12 +328,20 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// altSvc + two h3 probes (v1, v2), each bounded by opTimeout
+	// altSvc and the two h3 probes (v1, v2) run in parallel, each bounded by opTimeout
 	ctx, cancel := context.WithTimeout(r.Context(), opTimeout*3+2*time.Second)
 	defer cancel()
 
-	res.AltSvc, res.AdvertisesH3 = checkAltSvc(ctx, domain)
+	// The Alt-Svc fetch and the two HTTP/3 probes are independent: run them at
+	// once, so a check takes as long as the slowest one, not the sum.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res.AltSvc, res.AdvertisesH3 = checkAltSvc(ctx, domain)
+	}()
 	res.H3HandshakeOK, res.QuicVersions, res.TransportParams, res.ZeroRTT = checkH3(ctx, domain)
+	wg.Wait()
 	writeJSON(w, http.StatusOK, res)
 }
 
