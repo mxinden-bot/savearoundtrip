@@ -434,6 +434,7 @@ const CHECKLIST = [
   ["altsvc", "Advertises HTTP/3 in the <code>Alt-Svc</code> HTTP header", `Send <code>Alt-Svc: h3=":443"; ma=86400</code> on every response.`, "signal-altsvc"],
   ["rr", "Advertises HTTP/3 in an HTTPS DNS record", `Publish an HTTPS record with <code>alpn="h3"</code>.`, "signal-rr"],
   ["zerortt", "QUIC 0-RTT for repeat visits", "Enable QUIC 0-RTT.", "signal-0rtt"],
+  ["zerorttq", "QUIC 0-RTT for a GET with a query string", "Accept early data for a GET with a query string too, not only without one.", "signal-0rtt"],
 ];
 const MARK = { ok: "✓", todo: "✗", na: "–", unknown: "?", pending: "" };
 
@@ -457,6 +458,7 @@ function checklist(domain) {
   update();
   return {
     el: card,
+    get: (key) => state[key],
     set(key, s, note) {
       const [, , fix, anchor] = CHECKLIST.find((c) => c[0] === key);
       const li = items[key];
@@ -489,6 +491,7 @@ async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
   const altP = get(`/altsvc?domain=${q}`);
   const v1P = get(`/h3?v=1&domain=${q}`);
   const v2P = get(`/h3?v=2&domain=${q}`);
+  const zP = get(`/0rtt?domain=${q}`);
 
   const showAlt = (a) => {
     if (a.error) {
@@ -502,7 +505,7 @@ async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
   let h3Card = null;
   const showH3 = (h, a) => {
     if (h.error) {
-      ["h3", "zerortt"].forEach((k) => cl.set(k, "unknown", escapeHtml(h.error) + "."));
+      ["h3", "zerortt", "zerorttq"].forEach((k) => cl.set(k, "unknown", escapeHtml(h.error) + "."));
       h3Pending.replaceWith(verdict("", "HTTP/3 check skipped", escapeHtml(h.error) + "."));
       return;
     }
@@ -532,16 +535,45 @@ async function connectionChecks(domain, target, rrHasH3, hintShown, cl) {
     altPending.replaceWith(verdict("", "Alt-Svc check unavailable", "Couldn't reach the checker."));
   }
   if (!v1) {
-    ["h3", "zerortt"].forEach((k) => cl.set(k, "unknown", "Couldn't reach the checker."));
+    ["h3", "zerortt", "zerorttq"].forEach((k) => cl.set(k, "unknown", "Couldn't reach the checker."));
     h3Pending.replaceWith(verdict("", "HTTP/3 check unavailable", "Couldn't reach the checker."));
   }
 
-  const v2 = await v2P;
-  const pending = h3Card && h3Card.querySelector(".qv-pending");
-  if (pending) {
-    if (v2 && v2.h3_handshake_ok) pending.outerHTML = `<span class="pill h3">v2</span>`;
-    else pending.remove();
+  await Promise.all([
+    v2P.then((v2) => {
+      const pending = h3Card && h3Card.querySelector(".qv-pending");
+      if (!pending) return;
+      if (v2 && v2.h3_handshake_ok) pending.outerHTML = `<span class="pill h3">v2</span>`;
+      else pending.remove();
+    }),
+    cl.get("zerorttq") === "pending" ? zP.then((z) => showEarlyGets(cl, h3Card, z)) : null,
+  ]);
+}
+
+// What became of a GET sent as QUIC 0-RTT early data on a resumed connection.
+function earlyOutcome(g) {
+  if (!g.sent) return { ok: false, label: escapeHtml(g.error || "not sent") };
+  if (!g.accepted) return { ok: false, label: "early data declined" };
+  if (g.status === 425) return { ok: false, label: "425 Too Early" };
+  if (g.error || !g.status) return { ok: false, label: "no response" };
+  return { ok: true, label: `answered, ${g.status}` };
+}
+
+// The 0-RTT GET check: one GET with a query string, one without for comparison.
+function showEarlyGets(cl, h3Card, z) {
+  if (!z || z.error) {
+    cl.set("zerorttq", "unknown", z ? escapeHtml(z.error) + "." : "Couldn't run this check.");
+    return;
   }
+  const q = earlyOutcome(z.query), p = earlyOutcome(z.plain);
+  if (q.ok) cl.set("zerorttq", "ok");
+  else if (p.ok) cl.set("zerorttq", "todo");
+  else if (!z.query.sent) cl.set("zerorttq", "unknown", q.label + ".");
+  else cl.set("zerorttq", "unknown", "The server didn't answer in 0-RTT here, with or without a query string.");
+  const facts = h3Card && h3Card.querySelector(".facts");
+  if (!facts) return;
+  for (const [g, o] of [[z.plain, p], [z.query, q]])
+    facts.append(el("li", null, `<span class="k">0-RTT <code>GET ${escapeHtml(g.path)}</code></span><span class="val"><span class="pill${o.ok ? " h3" : ""}">${o.label}</span></span>`));
 }
 
 // The checklist items that come from the HTTP/3 check.
@@ -553,11 +585,13 @@ function setH3Items(cl, d, rrHasH3) {
   if (!speaks) cl.set("zerortt", "na", "Needs HTTP/3 first.");
   else if (d.zero_rtt) cl.set("zerortt", d.zero_rtt.early_data ? "ok" : "todo");
   else cl.set("zerortt", "unknown", "Not checked.");
+  if (!speaks) cl.set("zerorttq", "na", "Needs HTTP/3 first.");
+  else if (!d.zero_rtt || !d.zero_rtt.early_data) cl.set("zerorttq", "na", "Needs QUIC 0-RTT first.");
 }
 
 // One request for everything, for a backend without the per-check endpoints.
 async function legacyChecks(domain, altPending, h3Pending, rrHasH3, hintShown, cl) {
-  const unknown = (note) => ["h3", "altsvc", "zerortt"].forEach((k) => cl.set(k, "unknown", note));
+  const unknown = (note) => ["h3", "altsvc", "zerortt", "zerorttq"].forEach((k) => cl.set(k, "unknown", note));
   let d;
   try {
     const r = await fetch(`${CHECK_API}?domain=${encodeURIComponent(domain)}`, { cache: "no-store" });
@@ -575,6 +609,7 @@ async function legacyChecks(domain, altPending, h3Pending, rrHasH3, hintShown, c
     return;
   }
   setH3Items(cl, d, rrHasH3);
+  if (cl.get("zerorttq") === "pending") cl.set("zerorttq", "unknown", "Not checked.");
   cl.set("altsvc", d.advertises_h3 ? "ok" : "todo");
   altPending.replaceWith(altSvcBox(d, rrHasH3));
   h3Pending.replaceWith(h3Box(d, domain, rrHasH3, hintShown));

@@ -277,6 +277,11 @@
       the first packet, together with the handshake
       (<a href="https://www.rfc-editor.org/rfc/rfc9001#section-4.6">RFC 9001</a>).
     </p>
+    <p>
+      Some servers accept early data only for a GET without a query string.
+      Many links carry one, e.g. <code>?utm_source=newsletter</code>, so the
+      checker also sends <code>GET /?utm_source=savearoundtrip</code> in 0-RTT.
+    </p>
 
 
     <h3 id="support">Most servers and CDNs already support it</h3>

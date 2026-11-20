@@ -1,14 +1,24 @@
 package main
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/quic-go/qlog"
 )
 
@@ -171,5 +181,84 @@ func TestSplitEndpointsRejectBadInput(t *testing.T) {
 		if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 			t.Errorf("%s: content type %q", c.target, ct)
 		}
+	}
+}
+
+// testH3Server serves HTTP/3 on localhost with a fresh self-signed certificate.
+// Requests with a query string get 425 Too Early, as some servers do in 0-RTT.
+func testH3Server(t *testing.T, allow0RTT, rotateKeys bool) (addr string, roots *x509.CertPool) {
+	t.Helper()
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		DNSNames:     []string{"localhost"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, _ := x509.ParseCertificate(der)
+	roots = x509.NewCertPool()
+	roots.AddCert(cert)
+
+	udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+	var conns atomic.Int32
+	if rotateKeys {
+		// each connection gets new ticket keys, so no ticket is ever accepted
+		conf.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			c := conf.Clone()
+			c.SetSessionTicketKeys([][32]byte{{byte(conns.Add(1))}})
+			return c, nil
+		}
+	}
+	srv := &http3.Server{
+		TLSConfig:  conf,
+		QUICConfig: &quic.Config{Allow0RTT: allow0RTT},
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.RawQuery != "" {
+				w.WriteHeader(http.StatusTooEarly)
+			}
+		}),
+	}
+	go srv.Serve(udp)
+	t.Cleanup(func() { srv.Close(); udp.Close() })
+	return udp.LocalAddr().String(), roots
+}
+
+func TestEarlyGet(t *testing.T) {
+	addr, roots := testH3Server(t, true, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for path, status := range map[string]int{"/": http.StatusOK, "/?" + earlyQuery: http.StatusTooEarly} {
+		got := earlyGetAt(ctx, "localhost", addr, path, roots)
+		if !got.Sent || !got.Accepted || got.Status != status || got.Error != "" {
+			t.Errorf("%s: got %+v, want sent and accepted with status %d", path, got, status)
+		}
+	}
+}
+
+func TestEarlyGetWithout0RTT(t *testing.T) {
+	addr, roots := testH3Server(t, false, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	got := earlyGetAt(ctx, "localhost", addr, "/", roots)
+	if got.Sent || got.Accepted || got.Error != "no ticket permitting 0-RTT" {
+		t.Errorf("got %+v, want nothing sent for lack of an early-data ticket", got)
+	}
+}
+
+func TestEarlyGetRejected(t *testing.T) {
+	addr, roots := testH3Server(t, true, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	got := earlyGetAt(ctx, "localhost", addr, "/", roots)
+	if !got.Sent || got.Accepted || got.Error != "" {
+		t.Errorf("got %+v, want sent but not accepted", got)
 	}
 }

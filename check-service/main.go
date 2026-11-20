@@ -6,6 +6,11 @@
 //	GET /check/altsvc?domain=example.com   { "domain", "alt_svc", "advertises_h3", "error" }
 //	GET /check/h3?v=1&domain=example.com   { "domain", "version", "h3_handshake_ok", "transport_params", "zero_rtt", "error" }
 //	GET /check/h3?v=2&domain=example.com   (the same, for QUIC v2)
+//	GET /check/0rtt?domain=example.com     { "domain", "query", "plain" }
+//
+// /check/0rtt resumes a session and sends GET /?utm_source=savearoundtrip
+// ("query") and GET / ("plain") as QUIC 0-RTT early data, each reporting
+// "sent", "accepted" (the server took the early data) and the HTTP "status".
 //
 // GET /check?domain=example.com runs all of them and answers once, for pages
 // that predate the split:
@@ -26,7 +31,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -298,6 +305,134 @@ func tryH3(ctx context.Context, host string, v quic.Version) (bool, map[string]a
 	return resp.ProtoMajor == 3, tpc.get(), tkt.result()
 }
 
+// earlyQuery is the query string the 0-RTT check adds. Sites, caches and CDNs
+// commonly ignore UTM tracking parameters, so it shouldn't change the response.
+const earlyQuery = "utm_source=savearoundtrip"
+
+// earlyGet is one GET sent as QUIC 0-RTT early data on a resumed connection.
+type earlyGet struct {
+	Path string `json:"path"`
+	// Sent says a ticket permitting early data was available, so the request
+	// went out in 0-RTT.
+	Sent bool `json:"sent"`
+	// Accepted says the server accepted the early data (TLS level).
+	Accepted bool `json:"accepted"`
+	// Status is the HTTP status of the response, e.g. 425 Too Early.
+	Status int    `json:"status,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// sessionCache stores tickets like any client session cache and signals when
+// one that permits early data arrives.
+type sessionCache struct {
+	tls.ClientSessionCache
+	probe *ticketProbe
+}
+
+func (c *sessionCache) Put(key string, cs *tls.ClientSessionState) {
+	c.ClientSessionCache.Put(key, cs)
+	c.probe.Put(key, cs)
+}
+
+// tryEarlyGet gets a session ticket from a full handshake, then resumes with
+// it and sends GET path as 0-RTT early data. Each call uses its own ticket, so
+// servers that accept a ticket for early data only once don't skew the result.
+func tryEarlyGet(ctx context.Context, host, path string) earlyGet {
+	return earlyGetAt(ctx, host, host+":443", path, nil)
+}
+
+func earlyGetAt(ctx context.Context, host, addr, path string, roots *x509.CertPool) earlyGet {
+	res := earlyGet{Path: path}
+	cache := &sessionCache{tls.NewLRUClientSessionCache(1), newTicketProbe()}
+	tlsConf := &tls.Config{ServerName: host, RootCAs: roots, MinVersion: tls.VersionTLS13, NextProtos: []string{http3.NextProtoH3}, ClientSessionCache: cache}
+	quicConf := &quic.Config{Versions: []quic.Version{quic.Version1}}
+	tr := &http3.Transport{}
+	defer tr.Close()
+
+	get := func(method string, conn *quic.Conn, path string) (*http.Response, error) {
+		req, _ := http.NewRequestWithContext(ctx, method, "https://"+host+path, nil)
+		req.Header.Set("User-Agent", ua)
+		resp, err := tr.NewClientConn(conn).RoundTrip(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+		return resp, err
+	}
+
+	conn, err := quic.DialAddrEarly(ctx, addr, tlsConf, quicConf)
+	if err != nil {
+		res.Error = "no HTTP/3 handshake"
+		return res
+	}
+	_, err = get(http.MethodGet, conn, "/")
+	select {
+	case <-cache.probe.got:
+	case <-time.After(ticketWait):
+	case <-ctx.Done():
+	}
+	conn.CloseWithError(0, "")
+	if err != nil {
+		res.Error = "no HTTP/3 response"
+		return res
+	}
+	if !cache.probe.result().EarlyData {
+		res.Error = "no ticket permitting 0-RTT"
+		return res
+	}
+
+	conn, err = quic.DialAddrEarly(ctx, addr, tlsConf, quicConf)
+	if err != nil {
+		res.Error = "resumed handshake failed"
+		return res
+	}
+	defer conn.CloseWithError(0, "")
+	res.Sent = true
+	resp, err := get(http3.MethodGet0RTT, conn, path)
+	select {
+	case <-conn.HandshakeComplete():
+	case <-ctx.Done():
+	}
+	res.Accepted = conn.ConnectionState().Used0RTT
+	switch {
+	case errors.Is(err, quic.Err0RTTRejected):
+		res.Accepted = false
+	case err != nil:
+		res.Error = "no response"
+	default:
+		res.Status = resp.StatusCode
+	}
+	return res
+}
+
+type zeroRTTGetResult struct {
+	Domain string   `json:"domain"`
+	Query  earlyGet `json:"query"`
+	Plain  earlyGet `json:"plain"`
+}
+
+// handleZeroRTT sends a GET with a query string as 0-RTT early data, and the
+// same GET without one for comparison, both at once.
+func handleZeroRTT(w http.ResponseWriter, r *http.Request) {
+	if !preflight(w, r) {
+		return
+	}
+	domain := parseDomain(r)
+	release, ok := prepare(w, domain)
+	if !ok {
+		return
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(r.Context(), 2*opTimeout+ticketWait+time.Second)
+	defer cancel()
+	res := zeroRTTGetResult{Domain: domain}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); res.Query = tryEarlyGet(ctx, domain, "/?"+earlyQuery) }()
+	go func() { defer wg.Done(); res.Plain = tryEarlyGet(ctx, domain, "/") }()
+	wg.Wait()
+	writeJSON(w, http.StatusOK, res)
+}
+
 type errResult struct {
 	Domain string `json:"domain"`
 	Error  string `json:"error"`
@@ -449,8 +584,9 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/check", handleCheck)
 	mux.HandleFunc("/check/altsvc", handleAltSvc)
 	mux.HandleFunc("/check/h3", handleH3)
+	mux.HandleFunc("/check/0rtt", handleZeroRTT)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "savearoundtrip check service. GET /check/altsvc?domain=example.com, /check/h3?v=1&domain=example.com, or /check?domain=example.com for all at once")
+		fmt.Fprintln(w, "savearoundtrip check service. GET /check/altsvc?domain=example.com, /check/h3?v=1&domain=example.com, /check/0rtt?domain=example.com, or /check?domain=example.com for all at once")
 	})
 	return mux
 }
